@@ -35,6 +35,11 @@ mra guide                                     # 中文流程速查
 mra search "NASH 门脉纤维化中巨噬细胞来源的 TGF-β1" --max 60
 mra digest                                    # 逐篇结构化提炼
 
+# 网络到不了 NCBI？在浏览器里搜好，Send to → File → Format: XML，然后：
+mra import ~/Downloads/pubmed_result.xml --topic "NASH 纤维化"
+# 想先试试手感，仓库里有现成的 8 篇示例语料：
+mra import examples/demo_corpus.xml
+
 # 2. 磨假说：多轮对话，每轮都基于本地文献库检索
 mra chat
 mra hypothesis --note "第一版"                 # 冻结为可版本比较的假说
@@ -161,6 +166,7 @@ mra refs proposal.md            # 发现伪造引用时返回退出码 1，可�
 | `mra guide` | 中文流程速查 | |
 | `mra status` | 当前工作区概况 | |
 | `mra search TOPIC` | 规划检索式并抓取 PubMed | ✓ |
+| `mra import FILE.xml` | 导入浏览器保存的 PubMed XML（离线） | |
 | `mra digest` | 逐篇结构化提炼 | ✓ |
 | `mra chat [MSG]` | 科学对话（省略 MSG 进入交互） | ✓ |
 | `mra hypothesis` | 冻结为带版本的假说 | ✓ |
@@ -178,7 +184,7 @@ mra refs proposal.md            # 发现伪造引用时返回退出码 1，可�
 | `mra memory --refresh` | 课题方向图谱 | |
 | `mra export` | 全量导出 JSON | |
 
-`lint` / `refs` / `memory` / `status` / `guide` **完全离线**，没有 API key 也能跑。
+`import` / `lint` / `refs` / `memory` / `status` / `guide` **完全离线**，没有 API key 也能跑。
 
 ---
 
@@ -198,9 +204,10 @@ mra refs proposal.md            # 发现伪造引用时返回退出码 1，可�
 Introduction 叙事节奏、Results 排序这类结构性结论，必须加全文样本才可靠。
 `mra journal list` 会标注每个档案的来源，`journal add` 在只用摘要时会主动提醒。
 
-另外：PubMed 检索需要能访问 `eutils.ncbi.nlm.nih.gov`。在受限网络环境里，
-用 `mra search "..." --query '...'` 手工传检索式仍然需要网络；此时可先用其他机器抓取，
-再通过 `mra export` / 手工入库迁移。
+**PubMed 直连需要能访问 `eutils.ncbi.nlm.nih.gov`。** 国内网络下经常不稳定。
+这种情况用 `mra import`：在浏览器里正常检索，`Send to → File → Format: XML` 存下来再导入，
+后续所有环节完全一样。仓库里的 `examples/demo_corpus.xml` 是一份 8 篇的示例语料，
+可以直接导入试整条链路。
 
 ---
 
@@ -224,7 +231,8 @@ mra/
   citations.py    引用真实性核验
   memory.py       方向图谱 + 写作指纹
   prompts/*.md    所有提示词，Markdown 明文，可直接改
-tests/            129 个测试，全部离线运行
+examples/         示例语料（可直接 mra import）
+tests/            136 个测试，全部离线运行
 docs/PROPOSAL.md  条款式 + 提纲式方案书
 ```
 
@@ -237,7 +245,7 @@ docs/PROPOSAL.md  条款式 + 提纲式方案书
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q          # 129 passed，不需要 API key 和网络
+python -m pytest -q          # 136 passed，不需要 API key 和网络
 ```
 
 测试覆盖：PubMed XML 解析、FTS5 检索与排序、假说版本化、AI 痕迹评分与句子切分、

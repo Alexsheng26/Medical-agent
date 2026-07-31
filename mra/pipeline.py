@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 from . import prompts
 from .config import Config
 from .llm import LLM
-from .pubmed import PubMed
+from .pubmed import PubMed, parse_efetch_xml
 from .schemas import LitCard, QueryPlan
 from .store import Store
 
@@ -69,6 +70,34 @@ def search(
         found=len(articles),
         added=added,
         skipped_no_abstract=len(articles) - len(usable),
+    )
+
+
+def import_xml(store: Store, paths: list[Path], topic: str = "") -> SearchResult:
+    """Load records from PubMed XML saved on disk.
+
+    The escape hatch for when E-utilities is unreachable — a restricted network,
+    an institutional firewall, or an offline machine. In PubMed's web interface:
+    run the search, then *Send to → File → Format: XML*, and import the result.
+    """
+    found = added = skipped = 0
+    for path in paths:
+        if not path.exists():
+            raise FileNotFoundError(f"No such file: {path}")
+
+        articles = parse_efetch_xml(path.read_text(encoding="utf-8", errors="replace"))
+        usable = [a for a in articles if not a.is_empty]
+        found += len(articles)
+        skipped += len(articles) - len(usable)
+        added += store.add_articles(usable, topic=topic)
+        log.info("%s: %d records", path.name, len(articles))
+
+    return SearchResult(
+        query_used=f"import of {len(paths)} file(s)",
+        plan=None,
+        found=found,
+        added=added,
+        skipped_no_abstract=skipped,
     )
 
 

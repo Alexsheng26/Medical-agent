@@ -210,10 +210,13 @@ def _fidelity_warnings(before: str, after: str) -> list[str]:
     if added := pmids_after - pmids_before:
         warnings.append(f"Rewrite introduced citations not in the source: {', '.join(sorted(added))}")
 
-    nums_before = set(_NUMBER_RE.findall(before))
-    nums_after = set(_NUMBER_RE.findall(after))
+    # Strip citation markers first: a dropped PMID is already reported above, and
+    # letting it through here buries real data loss (an n, a p-value, an effect
+    # size) in a list of identifiers.
+    nums_before = set(_NUMBER_RE.findall(citations.CITATION_RE.sub(" ", before)))
+    nums_after = set(_NUMBER_RE.findall(citations.CITATION_RE.sub(" ", after)))
     if lost_nums := nums_before - nums_after:
-        sample = ", ".join(sorted(lost_nums)[:8])
+        sample = ", ".join(sorted(lost_nums, key=lambda n: (-len(n), n))[:8])
         warnings.append(f"Numbers present before the rewrite and absent after: {sample}")
 
     for marker in ("[DATA NEEDED", "[CITATION NEEDED"):

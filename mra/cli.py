@@ -23,6 +23,7 @@ GUIDE = """
 科研中间体 · 使用流程
 
   第一步 建库          mra search "NASH 肝纤维化 巨噬细胞" --max 60
+                       mra import result.xml           # 或：导入浏览器存下的 PubMed XML
                        mra digest                      # 结构化提炼每篇文献
   第二步 磨假说        mra chat                        # 多轮苏格拉底式对话
                        mra hypothesis --note "第一版"  # 冻结为可版本比较的假说
@@ -34,7 +35,7 @@ GUIDE = """
   长期沉淀            mra fingerprint ./my_papers      # 学习你自己的文风
                        mra memory --refresh            # 课题方向图谱
 
-  不需要 API key 的命令：lint / refs / memory / status / guide
+  不需要 API key 的命令：import / lint / refs / memory / status / guide
 """
 
 
@@ -159,6 +160,20 @@ def cmd_search(args, cfg: Config) -> int:
             print()
 
         print(f"PubMed returned {result.found} records; {result.added} new, "
+              f"{result.skipped_no_abstract} skipped (no abstract).")
+        print(f"Knowledge base now holds {store.count_articles()} papers.")
+        if result.added:
+            print("\nNext: `mra digest` to extract structured cards.")
+    return 0
+
+
+def cmd_import(args, cfg: Config) -> int:
+    """Load PubMed XML from disk. No API call, no network."""
+    with _store(cfg) as store:
+        result = pipeline.import_xml(
+            store, [Path(p) for p in args.files], topic=args.topic
+        )
+        print(f"Read {result.found} records; {result.added} new, "
               f"{result.skipped_no_abstract} skipped (no abstract).")
         print(f"Knowledge base now holds {store.count_articles()} papers.")
         if result.added:
@@ -498,6 +513,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("topic", help="Clinical question or topic")
     p.add_argument("--max", type=int, default=50, help="Max records to retrieve")
     p.add_argument("--query", help="Use this PubMed query verbatim, skipping planning")
+
+    p = add("import", cmd_import, "Load PubMed XML saved from the browser (offline)")
+    p.add_argument("files", nargs="+", help="PubMed XML file(s)")
+    p.add_argument("--topic", default="", help="Label these records with a topic")
 
     p = add("digest", cmd_digest, "Extract structured cards for stored articles")
     p.add_argument("--limit", type=int, help="Only process this many")

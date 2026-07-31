@@ -1,6 +1,7 @@
 """End-to-end tests for the commands that run without an API key."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -77,6 +78,56 @@ def test_refs_passes_when_all_citations_resolve(workspace, tmp_path):
     target = tmp_path / "draft.md"
     target.write_text("Supported [PMID:31234567].", encoding="utf-8")
     assert run(["refs", str(target), "--list"], workspace) == 0
+
+
+class TestImport:
+    """The offline path into the knowledge base, for restricted networks."""
+
+    FIXTURE = Path(__file__).parent / "fixtures" / "efetch_sample.xml"
+
+    def test_imports_without_api_key_or_network(self, workspace, capsys):
+        run(["init"], workspace)
+        assert run(["import", str(self.FIXTURE), "--topic", "fibrosis"], workspace) == 0
+
+        out = capsys.readouterr().out
+        assert "Read 3 records; 2 new, 1 skipped" in out
+
+        with Store(workspace / "knowledge.db") as store:
+            assert store.count_articles() == 2
+            assert store.get_article("31234567").journal_abbrev == "Hepatology"
+
+    def test_reimport_does_not_duplicate(self, workspace):
+        run(["init"], workspace)
+        run(["import", str(self.FIXTURE)], workspace)
+        run(["import", str(self.FIXTURE)], workspace)
+
+        with Store(workspace / "knowledge.db") as store:
+            assert store.count_articles() == 2
+
+    def test_multiple_files_in_one_call(self, workspace, tmp_path):
+        run(["init"], workspace)
+        second = tmp_path / "more.xml"
+        second.write_text(
+            self.FIXTURE.read_text(encoding="utf-8").replace("31234567", "40000001"),
+            encoding="utf-8",
+        )
+        run(["import", str(self.FIXTURE), str(second)], workspace)
+
+        with Store(workspace / "knowledge.db") as store:
+            assert store.count_articles() == 3
+
+    def test_missing_file_reports_clearly(self, workspace, capsys, tmp_path):
+        run(["init"], workspace)
+        assert run(["import", str(tmp_path / "nope.xml")], workspace) == 1
+        assert "No such file" in capsys.readouterr().err
+
+    def test_imported_records_are_searchable(self, workspace):
+        run(["init"], workspace)
+        run(["import", str(self.FIXTURE)], workspace)
+
+        with Store(workspace / "knowledge.db") as store:
+            hits = store.search("macrophage TGF portal fibrosis")
+            assert hits[0][0].pmid == "31234567"
 
 
 def test_memory_refresh_without_api_key(workspace, capsys):

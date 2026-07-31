@@ -132,6 +132,25 @@ class TestFidelityGuards:
         )
         assert any("DATA NEEDED" in w for w in warnings)
 
+    def test_pmids_are_not_reported_as_lost_numbers(self):
+        """A dropped citation is reported once, as a citation — not again as a
+        number. Otherwise real data loss is buried among identifiers."""
+        warnings = writing._fidelity_warnings(
+            "Area fell 38% (p = 0.002) [PMID:33445566].", "Area fell substantially."
+        )
+        number_warnings = [w for w in warnings if "Numbers present" in w]
+        assert len(number_warnings) == 1
+        assert "38" in number_warnings[0]
+        assert "0.002" in number_warnings[0]
+        assert "33445566" not in number_warnings[0]
+
+    def test_dropping_only_a_citation_gives_no_number_warning(self):
+        warnings = writing._fidelity_warnings(
+            "Shown previously [PMID:33445566].", "Shown previously."
+        )
+        assert not any("Numbers present" in w for w in warnings)
+        assert any("dropped citations" in w for w in warnings)
+
     def test_faithful_rewrite_produces_no_warnings(self):
         before = "Sirius red area fell 38% (p = 0.002) [PMID:31234567]."
         after = "Fibrotic area dropped by 38% (p = 0.002) [PMID:31234567]."
