@@ -1,0 +1,19 @@
+# Workspace: knowledge base, drafts, memory, and the researcher's own data.
+# Never commit these — they contain unpublished results (QA-3).
+.mra/
+*.db
+*.db-wal
+*.db-shm
+
+# Researcher-supplied samples and data
+samples/
+my_papers/
+data/
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.env

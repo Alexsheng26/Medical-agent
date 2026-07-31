@@ -1,0 +1,142 @@
+<?xml version="1.0" ?>
+<!DOCTYPE PubmedArticleSet PUBLIC "-//NLM//DTD PubMedArticle, 1st January 2024//EN" "https://dtd.nlm.nih.gov/ncbi/pubmed/out/pubmed_240101.dtd">
+<PubmedArticleSet>
+
+<PubmedArticle>
+  <MedlineCitation Status="MEDLINE" Owner="NLM">
+    <PMID Version="1">31234567</PMID>
+    <Article PubModel="Print">
+      <Journal>
+        <ISSN IssnType="Electronic">1527-3350</ISSN>
+        <JournalIssue CitedMedium="Internet">
+          <Volume>70</Volume>
+          <PubDate>
+            <Year>2019</Year>
+            <Month>Nov</Month>
+          </PubDate>
+        </JournalIssue>
+        <Title>Hepatology (Baltimore, Md.)</Title>
+        <ISOAbbreviation>Hepatology</ISOAbbreviation>
+      </Journal>
+      <ArticleTitle>Macrophage-derived TGF-<i>&#x3b2;</i>1 drives portal fibrosis in murine NASH.</ArticleTitle>
+      <Abstract>
+        <AbstractText Label="BACKGROUND AND AIMS" NlmCategory="OBJECTIVE">Portal fibrosis predicts outcome in nonalcoholic steatohepatitis (NASH), but the cellular source of profibrotic signals is unresolved.</AbstractText>
+        <AbstractText Label="METHODS" NlmCategory="METHODS">We used myeloid-specific Tgfb1 knockout mice fed a choline-deficient high-fat diet (CDAHFD) for 12 weeks (n = 10 per group) and validated findings in 48 human liver biopsies.</AbstractText>
+        <AbstractText Label="RESULTS" NlmCategory="RESULTS">Myeloid Tgfb1 deletion reduced Sirius red-positive area by 38% (p = 0.002) and lowered portal collagen I deposition. Human portal macrophage density correlated with fibrosis stage (r = 0.61, p &lt; 0.001).</AbstractText>
+        <AbstractText Label="CONCLUSIONS" NlmCategory="CONCLUSIONS">Macrophage-derived TGF-beta1 is a targetable driver of portal fibrosis in NASH.</AbstractText>
+      </Abstract>
+      <AuthorList CompleteYN="Y">
+        <Author ValidYN="Y">
+          <LastName>Chen</LastName>
+          <ForeName>Wei</ForeName>
+          <Initials>W</Initials>
+        </Author>
+        <Author ValidYN="Y">
+          <LastName>Okonkwo</LastName>
+          <ForeName>Amara</ForeName>
+          <Initials>A</Initials>
+        </Author>
+        <Author ValidYN="Y">
+          <LastName>Nilsson</LastName>
+          <ForeName>Erik</ForeName>
+          <Initials>E</Initials>
+        </Author>
+      </AuthorList>
+      <PublicationTypeList>
+        <PublicationType UI="D016428">Journal Article</PublicationType>
+        <PublicationType UI="D013487">Research Support, Non-U.S. Gov't</PublicationType>
+      </PublicationTypeList>
+      <ELocationID EIdType="doi" ValidYN="Y">10.1002/hep.30712</ELocationID>
+    </Article>
+    <MeshHeadingList>
+      <MeshHeading>
+        <DescriptorName UI="D008264" MajorTopicYN="Y">Macrophages</DescriptorName>
+      </MeshHeading>
+      <MeshHeading>
+        <DescriptorName UI="D005355" MajorTopicYN="Y">Liver Cirrhosis</DescriptorName>
+      </MeshHeading>
+      <MeshHeading>
+        <DescriptorName UI="D016212" MajorTopicYN="N">Transforming Growth Factor beta</DescriptorName>
+      </MeshHeading>
+      <MeshHeading>
+        <DescriptorName UI="D006801" MajorTopicYN="N">Humans</DescriptorName>
+      </MeshHeading>
+    </MeshHeadingList>
+  </MedlineCitation>
+  <PubmedData>
+    <ArticleIdList>
+      <ArticleId IdType="pubmed">31234567</ArticleId>
+      <ArticleId IdType="doi">10.1002/hep.30712</ArticleId>
+    </ArticleIdList>
+  </PubmedData>
+</PubmedArticle>
+
+<PubmedArticle>
+  <MedlineCitation Status="MEDLINE" Owner="NLM">
+    <PMID Version="1">28001122</PMID>
+    <Article PubModel="Electronic">
+      <Journal>
+        <JournalIssue CitedMedium="Internet">
+          <PubDate>
+            <MedlineDate>2016 Nov-Dec</MedlineDate>
+          </PubDate>
+        </JournalIssue>
+        <Title>Journal of Hepatology</Title>
+        <ISOAbbreviation>J Hepatol</ISOAbbreviation>
+      </Journal>
+      <ArticleTitle>Hepatic stellate cell activation is independent of Kupffer cell signalling.</ArticleTitle>
+      <Abstract>
+        <AbstractText>Stellate cell activation proceeded normally after clodronate-mediated Kupffer cell depletion, arguing against an obligate macrophage requirement.</AbstractText>
+      </Abstract>
+      <AuthorList CompleteYN="Y">
+        <Author ValidYN="Y">
+          <LastName>Yamamoto</LastName>
+          <Initials>K</Initials>
+        </Author>
+      </AuthorList>
+      <PublicationTypeList>
+        <PublicationType UI="D016428">Journal Article</PublicationType>
+      </PublicationTypeList>
+    </Article>
+    <MeshHeadingList>
+      <MeshHeading>
+        <DescriptorName UI="D021640" MajorTopicYN="Y">Hepatic Stellate Cells</DescriptorName>
+      </MeshHeading>
+      <MeshHeading>
+        <DescriptorName UI="D007728" MajorTopicYN="N">Kupffer Cells</DescriptorName>
+      </MeshHeading>
+    </MeshHeadingList>
+  </MedlineCitation>
+  <PubmedData>
+    <ArticleIdList>
+      <ArticleId IdType="pubmed">28001122</ArticleId>
+    </ArticleIdList>
+  </PubmedData>
+</PubmedArticle>
+
+<PubmedArticle>
+  <MedlineCitation Status="PubMed-not-MEDLINE" Owner="NLM">
+    <PMID Version="1">30009999</PMID>
+    <Article PubModel="Print">
+      <Journal>
+        <JournalIssue CitedMedium="Print">
+          <PubDate>
+            <Year>2018</Year>
+          </PubDate>
+        </JournalIssue>
+        <Title>Some Conference Proceedings</Title>
+      </Journal>
+      <ArticleTitle>Abstract-free conference report.</ArticleTitle>
+      <AuthorList CompleteYN="N">
+        <Author ValidYN="Y">
+          <CollectiveName>The Liver Study Group</CollectiveName>
+        </Author>
+      </AuthorList>
+      <PublicationTypeList>
+        <PublicationType UI="D016421">Editorial</PublicationType>
+      </PublicationTypeList>
+    </Article>
+  </MedlineCitation>
+</PubmedArticle>
+
+</PubmedArticleSet>
