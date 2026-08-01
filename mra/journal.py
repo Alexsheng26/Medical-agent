@@ -6,7 +6,8 @@ Two sources of samples, and the difference matters:
   conventions plus a rough sense of scope. Structural claims about Introductions
   and Discussions inferred from abstracts alone are weak.
 - **Full-text files** the researcher supplies produce a profile that can
-  actually drive drafting.
+  actually drive drafting. PDFs are read directly — a folder of downloaded
+  papers is what a researcher actually has.
 
 Use PubMed to bootstrap, then add three to five full texts of papers close to
 the researcher's own work.
@@ -18,7 +19,7 @@ import json
 import logging
 from pathlib import Path
 
-from . import prompts
+from . import ingest, prompts
 from .config import Config
 from .llm import LLM
 from .pubmed import PubMed
@@ -27,7 +28,7 @@ from .store import Store
 
 log = logging.getLogger(__name__)
 
-TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".text"}
+TEXT_SUFFIXES = ingest.TEXT_SUFFIXES
 
 # Full texts are long; this keeps a five-paper sample inside a sane prompt while
 # preserving the parts that carry style (opening and closing of each section).
@@ -56,24 +57,45 @@ def collect_pubmed_samples(cfg: Config, journal: str, count: int = 20, years: in
 
 
 def collect_file_samples(directory: Path) -> list[str]:
-    """Read full-text samples the researcher has saved as plain text."""
+    """Read full-text samples from the researcher's own files.
+
+    PDFs are read directly. What a researcher has on disk is a folder of PDFs,
+    and asking them to copy-paste five papers into .txt files before profiling
+    can begin is the kind of manual step that stops a tool from being used.
+    Extraction quality is uneven — columns, tables and captions come out ragged
+    — but style profiling reads paragraph rhythm, tense and hedging, which
+    survive that far better than numbers do.
+    """
     if not directory.exists():
         raise FileNotFoundError(f"No such directory: {directory}")
 
     samples = []
+    skipped: list[str] = []
     for path in sorted(directory.iterdir()):
-        if path.suffix.lower() not in TEXT_SUFFIXES:
+        if path.suffix.lower() not in ingest.PDF_SUFFIXES | TEXT_SUFFIXES:
             continue
-        text = path.read_text(encoding="utf-8", errors="replace").strip()
-        if len(text) < 500:
-            log.warning("Skipping %s — too short to profile from.", path.name)
+
+        doc = ingest.extract(path)
+        for warning in doc.warnings:
+            log.warning("%s: %s", path.name, warning)
+        if not doc.usable:
+            skipped.append(path.name)
             continue
-        samples.append(f"FULL TEXT ({path.name}):\n{_trim(text, MAX_CHARS_PER_FULLTEXT)}")
+
+        samples.append(f"FULL TEXT ({path.name}):\n{_trim(doc.text, MAX_CHARS_PER_FULLTEXT)}")
+
+    if skipped:
+        log.warning(
+            "Skipped %d unusable file(s): %s. A scanned PDF has no text layer "
+            "and needs OCR first.",
+            len(skipped),
+            ", ".join(skipped),
+        )
 
     if not samples:
         raise ValueError(
-            f"No usable .txt/.md files in {directory}. Save each paper's text as a "
-            "separate .txt file (copy-paste from the PDF is fine)."
+            f"No usable .pdf/.txt/.md files in {directory}. Put 3-5 papers from this "
+            "journal there — PDFs are read directly, no conversion needed."
         )
     return samples
 

@@ -162,6 +162,50 @@ class TestFidelityGuards:
         assert result.warnings
 
 
+class TestNotesSplitting:
+    """The drafted file becomes the submission. A sentence addressed to the
+    researcher must never ride along into it."""
+
+    def test_notes_are_separated_from_the_manuscript(self):
+        reply = (
+            "F2 的均值和 CSV 对不上，你需要确认。\n"
+            "===MANUSCRIPT===\n"
+            "## Results\n\nSeptal density rose with stage."
+        )
+        manuscript, notes = writing.split_notes(reply)
+
+        assert manuscript.startswith("## Results")
+        assert "CSV" in notes
+        assert "CSV" not in manuscript
+
+    def test_no_marker_keeps_everything_as_manuscript(self):
+        """Fail-safe: losing a section because the model skipped a separator is
+        far worse than a stray sentence of commentary surviving."""
+        reply = "## Results\n\nSeptal density rose with stage."
+        manuscript, notes = writing.split_notes(reply)
+
+        assert manuscript == reply
+        assert notes == ""
+
+    def test_marker_must_be_on_its_own_line(self):
+        reply = "We used the ===MANUSCRIPT=== convention in the methods."
+        manuscript, notes = writing.split_notes(reply)
+
+        assert manuscript == reply
+        assert notes == ""
+
+    def test_empty_notes_section_is_empty_not_whitespace(self):
+        manuscript, notes = writing.split_notes("\n===MANUSCRIPT===\n## Results\n")
+        assert notes == ""
+        assert manuscript == "## Results"
+
+    def test_only_the_first_marker_splits(self):
+        reply = "note\n===MANUSCRIPT===\n## Results\n\nText.\n===MANUSCRIPT===\nmore"
+        manuscript, notes = writing.split_notes(reply)
+        assert notes == "note"
+        assert manuscript.startswith("## Results")
+
+
 class TestFenceStripping:
     def test_strips_wrapping_fence(self):
         assert writing._strip_fences("```markdown\n# Title\n\nBody\n```") == "# Title\n\nBody"

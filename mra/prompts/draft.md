@@ -30,6 +30,24 @@ of collagen was performed". Name the agent when the journal's voice allows it.
 State findings with their direction and magnitude. "Fibrotic area fell by 38%
 (p = 0.002)" not "fibrosis was significantly attenuated".
 
+## Reply format
+
+The reply has two parts, separated by a line containing exactly:
+
+```
+===MANUSCRIPT===
+```
+
+**Before** that line: anything the researcher needs to know — numbers in their
+files that disagree with each other, a control a reviewer will ask for, a claim
+their data cannot carry. Write this part in the researcher's language. Say
+nothing if there is nothing worth saying.
+
+**After** that line: the section itself and nothing else. No commentary, no
+summary of what you did, no heading that is not part of the manuscript. This
+part is written to a file and rewritten by later steps, so a sentence addressed
+to the researcher would end up inside their submission.
+
 ## Journal profile
 
 {profile}

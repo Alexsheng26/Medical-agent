@@ -53,8 +53,15 @@ def draft(
     data_text: str,
     *,
     context_query: str = "",
-) -> str:
-    """Generate one manuscript section in a journal's style."""
+) -> tuple[str, str]:
+    """Generate one manuscript section in a journal's style.
+
+    Returns `(manuscript, notes)`. The notes are what the model wants to tell
+    the researcher — a number in their files that contradicts another, a control
+    a reviewer will stop on. They belong on screen, never in the file: the file
+    is rewritten by `nativize` and `polish` and ends up as the submission, so a
+    sentence addressed to the researcher would ride along into it.
+    """
     profile = journal_mod.profile_text(store, journal)
     query = context_query or data_text[:2000]
     context, _ = retrieval.build_context(store, query, k=cfg.retrieval_k)
@@ -76,7 +83,24 @@ def draft(
         max_tokens=cfg.max_tokens,
         cache_upto=0,
     )
-    return result.text
+    return split_notes(result.text)
+
+
+MANUSCRIPT_MARKER = "===MANUSCRIPT==="
+
+
+def split_notes(text: str) -> tuple[str, str]:
+    """Split a reply into `(manuscript, notes)` on the marker.
+
+    Fail-safe by design: no marker means the whole reply is the manuscript.
+    Losing a section because the model skipped a separator would be far worse
+    than a stray sentence of commentary surviving into the draft.
+    """
+    for line in text.splitlines():
+        if line.strip() == MANUSCRIPT_MARKER:
+            notes, _, manuscript = text.partition(line)
+            return manuscript.strip(), notes.strip()
+    return text.strip(), ""
 
 
 def nativize(

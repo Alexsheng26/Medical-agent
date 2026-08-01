@@ -1,3 +1,5 @@
+import pytest
+
 from mra import deai
 
 # Deliberately written in the register the lint is meant to catch: stock phrases,
@@ -118,6 +120,88 @@ def test_summary_is_renderable():
     text = deai.analyze(AI_SLOP).summary()
     assert "AI-tell lint score" in text
     assert "heuristic" in text, "the summary must not overstate what this measures"
+
+
+class TestAnnotationsAreNotProse:
+    """`[DATA NEEDED: ...]` is a question for the researcher, not text to score.
+
+    Scoring it punished the behaviour we want — a draft that flags every number
+    it cannot support — and fed `polish` findings telling it to recast the very
+    markers `writing.py` warns about losing.
+    """
+
+    def test_data_needed_blocks_do_not_create_repeated_openings(self):
+        body = (
+            "Septal density rose across fibrosis stage in every biopsy examined. "
+            "Control livers carried far fewer of these cells. "
+            "Overlap between adjacent stages was substantial. "
+            "Representative fields appear in the first figure panel. "
+            "Counts were made inside fibrous septa only. "
+            "Parenchymal fields were not acquired in the same sections."
+        )
+        annotated = body + " " + " ".join(
+            f"[DATA NEEDED: per-arm n, effect size, and the test used for panel {i}]"
+            for i in range(6)
+        )
+
+        kinds = {f.kind for f in deai.analyze(annotated).findings}
+        assert "repeated openings" not in kinds
+
+    def test_lists_inside_annotations_are_not_triadic_findings(self):
+        text = (
+            "We quantified septal macrophage density in every biopsy. "
+            "[DATA NEEDED: BMI, diabetes status, and platelet count for both groups] "
+            "[DATA NEEDED: age, sex, and disease duration for the control group] "
+            "[DATA NEEDED: cohort size, stage, and follow-up interval]"
+        )
+        assert "triadic lists" not in {f.kind for f in deai.analyze(text).findings}
+
+    def test_annotations_do_not_inflate_sentence_length(self):
+        prose = "Density rose with stage. The gradient was monotonic."
+        annotated = (
+            "Density rose with stage. [DATA NEEDED: post hoc pairwise p values for "
+            "every stage comparison, with the correction method used] "
+            "The gradient was monotonic."
+        )
+        assert deai.analyze(annotated).metrics["mean_sentence_len"] == pytest.approx(
+            deai.analyze(prose).metrics["mean_sentence_len"], abs=0.6
+        )
+
+    def test_citation_markers_are_not_words(self):
+        with_marker = "Septal density rose with fibrosis stage [PMID:31234567]."
+        without = "Septal density rose with fibrosis stage."
+        assert deai.strip_annotations(with_marker).split() == without.split()
+
+    def test_markdown_headings_are_not_sentence_openings(self):
+        """`4 sentences begin with '###'` is a fact about the file format."""
+        text = "\n\n".join(
+            f"### Finding {i} in the septal compartment\n\nDensity rose with stage."
+            for i in range(4)
+        )
+        detail = " ".join(
+            f.detail for f in deai.analyze(text).findings if f.kind == "repeated openings"
+        )
+        assert "###" not in detail
+
+    def test_heading_words_still_count(self):
+        """Strip the marker, keep the voice — title grammar is real style."""
+        assert "Septal" in deai.strip_annotations("### Septal density rises with stage")
+
+    def test_bold_markers_are_not_part_of_the_word(self):
+        assert deai.strip_annotations("**Density** rose.") == "Density rose."
+
+    def test_list_markers_are_dropped(self):
+        stripped = deai.strip_annotations("- first item\n- second item\n1. third item")
+        assert stripped.splitlines() == ["first item", "second item", "third item"]
+
+    def test_real_prose_still_scores(self):
+        """The strip must not become a way to launder actual tells."""
+        text = (
+            "It is worth noting that macrophages delve into the intricate interplay "
+            "of fibrosis. [DATA NEEDED: n per group] This underscores the importance "
+            "of a comprehensive understanding of the mechanism."
+        )
+        assert "stock phrase" in {f.kind for f in deai.analyze(text).findings}
 
 
 class TestSentenceSplitting:

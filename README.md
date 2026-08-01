@@ -88,7 +88,9 @@ mra journal list
 mra journal show hepatology
 ```
 
-把 3–5 篇**与你工作最接近的**该刊论文，从 PDF 复制成 `.txt` 放进目录即可。
+把 3–5 篇**与你工作最接近的**该刊论文丢进目录即可 —— **PDF 直接读，不用转 txt**。
+扫描件（没有文字层）会被跳过并明确告知需要 OCR，不会拿它去建一个凭空的档案。
+
 提炼出的是可计数的规则（Introduction 几段、每段做什么、Results 如何排序、
 时态与语态、claim 强度），不是"要清晰简洁"这种无用描述。
 
@@ -104,6 +106,14 @@ mra assess data.csv --journal Hepatology --notes "n=12/组，两批独立队列"
 mra draft results --journal Hepatology --data data.csv -o results.md
 mra finalize results.md --journal Hepatology     # 一步产出 v1 / v2 / 报告
 ```
+
+`mra draft` 的输出分两处：**给你的提醒打在屏幕上，文件里只有稿子。**
+提醒往往是这一步最有价值的东西——它会核对你给的数字（实测中它发现 summary 里的
+分期均值和原始 CSV 对不上、pooled 的共阳性比例掩盖了分期梯度），也会点名
+"这一条审稿人一定会问"。但它绝不写进文件：那个文件后面要被 `nativize` 和
+`polish` 改写，最终就是投出去的稿子，一句写给你的话混进去就是事故。
+
+撑不住的地方写成 `[DATA NEEDED: 具体缺什么]`，绝不编数字。
 
 两种模式共用一条命令，按 `--journal` 在不在分派。**不带 `--journal` 是常态**——
 先看数据能打到哪一层，再决定投哪里。
@@ -223,6 +233,12 @@ mra finalize draft.md --journal Hepatology   # v1 + v2 + 报告
 lint 检测：固定套话、句长方差过低（burstiness）、段落长度过于均匀、
 连接词开头密度、名词化密度、三项式排比、重复句首。
 改写提示词里明确要求**改写句子结构，而不是替换被标记的词**。
+
+评分前会先剥掉**不是正文的东西**：`[DATA NEEDED]` / `[CITATION NEEDED]` 标注、
+`[PMID:x]` 引用标记、Markdown 的标题与列表符号。这一条不是洁癖——不剥的话，
+一份老老实实标出每一个缺失数字的草稿，会因为"6 个句子以 `[data` 开头"被扣分，
+而 `polish` 正是由这些扣分项驱动的，等于在劝改写去抹掉那些标记；
+可 `writing.py` 又会因为标记被抹掉而告警。工具的两半互相打架。
 
 每一轮改写后会自动比对：**引用是否丢失、数字是否消失、`[DATA NEEDED]` 标记是否被抹掉**。
 任何一项异常都会在报告里告警。评分变差的改写会被丢弃并保留上一版。

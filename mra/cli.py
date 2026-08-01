@@ -547,9 +547,14 @@ def cmd_draft(args, cfg: Config) -> int:
         if args.notes:
             data_text = f"RESEARCHER'S NOTES:\n{args.notes}\n\n{data_text}"
 
-        text = writing.draft(cfg, store, llm, args.section, args.journal, data_text)
+        text, notes = writing.draft(cfg, store, llm, args.section, args.journal, data_text)
         path = _write_out(text, args.output, cfg, f"{args.section}.v1.md")
 
+        if notes:
+            # On screen, not in the file. These are usually the most useful part
+            # of the run — a number that disagrees with another number — and the
+            # file has to stay submittable.
+            print(f"{notes}\n\n{'─' * 60}\n")
         print(f"Written to {path}\n")
         print(citations.check(text, store).summary())
         print()
@@ -770,7 +775,7 @@ def build_parser() -> argparse.ArgumentParser:
     jp = jsub.add_parser("add", help="Build a style profile")
     jp.set_defaults(func=cmd_journal_add)
     jp.add_argument("name", help='Journal name, e.g. "Hepatology"')
-    jp.add_argument("--samples", help="Directory of full-text .txt samples")
+    jp.add_argument("--samples", help="Directory of full-text samples (.pdf/.txt/.md)")
     jp.add_argument("--pubmed", type=int, default=20, help="Abstracts to sample (0 to skip)")
     jp.add_argument("--years", type=int, default=5, help="How far back to sample")
 

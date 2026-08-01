@@ -199,8 +199,47 @@ def split_sentences(text: str) -> list[str]:
     return sentences
 
 
+# Editorial annotations the drafting step inserts, and citation markers. Neither
+# is prose: `[DATA NEEDED: ...]` is a question addressed to the researcher and
+# will be answered or deleted before submission.
+ANNOTATION_RE = re.compile(
+    r"\[(?:DATA|CITATION) NEEDED[^\]]*\]|\[(?:PMID|LOCAL):[^\]]*\]",
+    re.IGNORECASE,
+)
+
+
+# Structural markup, stripped so that the words survive but the syntax does not.
+# `### Septal density rises with stage` is a heading whose words belong to the
+# document's voice; `###` is not the sentence's first word.
+_MARKDOWN_LINE_RE = re.compile(r"^\s*(?:#{1,6}\s+|[-*+]\s+|>\s?|\d+\.\s+)", re.MULTILINE)
+_EMPHASIS_RE = re.compile(r"(\*{1,3}|_{2,3})(?=\S)(.+?)(?<=\S)\1", re.DOTALL)
+
+
+def strip_annotations(text: str) -> str:
+    """Remove editorial markup before scoring.
+
+    A draft that honestly flags every missing number gets a long run of
+    `[DATA NEEDED: ...]` blocks, and scoring them as prose punishes exactly the
+    behaviour we want: they registered as sentences all starting with the same
+    word, and their contents produced 'triadic list' findings. Worse, `polish`
+    is driven by these findings, so the rewrite was being told to recast the
+    markers — while `writing.py` separately warns when a rewrite removes them.
+    Two halves of the tool pulling against each other. Markdown structure is
+    dropped for the same reason: four `###` headings were being reported as
+    "4 sentences begin with '###'", which is a fact about the file format.
+    """
+    text = ANNOTATION_RE.sub(" ", text)
+    text = _MARKDOWN_LINE_RE.sub("", text)
+    text = _EMPHASIS_RE.sub(r"\2", text)
+    # An annotation sitting before the full stop would otherwise leave `stage .`,
+    # which the sentence splitter reads as its own fragment.
+    text = re.sub(r"\s+([.,;:!?)])", r"\1", text)
+    return re.sub(r"[ \t]{2,}", " ", text)
+
+
 def analyze(text: str) -> DeAIReport:
     """Score English prose for surface AI tells."""
+    text = strip_annotations(text)
     sentences = split_sentences(text)
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     words = _WORD.findall(text)
