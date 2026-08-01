@@ -11,7 +11,9 @@ specialist journal** in this field and **5 is the bar for the top general
 journals**:
 
 - **novelty** — against the published literature, not against the researcher's
-  own prior work. Ask what a reader already believed before this paper.
+  own prior work. Ask what a reader already believed before this paper. The
+  retrieved papers below are the evidence for this judgement: if one of them
+  already shows the central claim, say so and cite it in the justification.
 - **mechanism depth** — is causality shown or inferred? Is there convergence
   from independent approaches (genetic and pharmacological, gain and loss)?
 - **clinical relevance** — is there human tissue, human cohort, or a validated
@@ -40,6 +42,14 @@ would land well as it stands. This is useful advice, not a consolation prize.
 ## Journal profile
 
 {profile}
+
+## Papers retrieved from the researcher's knowledge base
+
+Use these to judge novelty. If the knowledge base returned nothing, say so in
+the novelty justification — a novelty score with no literature behind it is an
+opinion, and the researcher should know that is what they are getting.
+
+{context}
 
 ## The researcher's data
 

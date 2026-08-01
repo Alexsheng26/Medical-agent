@@ -128,6 +128,57 @@ class FitAssessment(BaseModel):
     alternative_journals: list[str] = Field(description="Better-matched targets if fit is weak")
 
 
+class JournalCandidate(BaseModel):
+    """One journal proposed as a target for the work in hand."""
+
+    journal: str = Field(
+        description="The journal's full name as it would be typed into a submission "
+        "system, e.g. 'Journal of Hepatology', not 'J Hepatol'"
+    )
+    tier: str = Field(
+        description="One of: reach, realistic, safe. 'realistic' means submission "
+        "today has a fair chance; 'reach' means it needs the additions listed in gaps"
+    )
+    why: str = Field(
+        description="Why this journal specifically, in terms of its scope and what it "
+        "has published recently — not generic praise of the work"
+    )
+    gaps: list[str] = Field(
+        description="What this journal in particular would demand that the data do not "
+        "yet show. Empty if the work clears its bar as it stands."
+    )
+    odds: str = Field(
+        description="Rough chance of surviving to review as the data stand, as a short "
+        "phrase with a caveat, e.g. 'moderate, if the human cohort holds up'"
+    )
+
+
+class JournalRecommendation(BaseModel):
+    """Ranked journal targets for a body of data (Clause 4.2, no target given).
+
+    The dimension scores are the same five as FitAssessment, but scored against
+    the field rather than against one journal's bar — the whole point is that no
+    target has been chosen yet.
+    """
+
+    dimensions: list[DimensionScore] = Field(
+        description="One entry each for: novelty, mechanism depth, clinical relevance, "
+        "data robustness, story coherence"
+    )
+    strongest_claim: str = Field(description="The most defensible headline claim these data support")
+    overclaims: list[str] = Field(description="Claims the data would not survive review on")
+    candidates: list[JournalCandidate] = Field(
+        description="4-6 journals, best match first, spanning reach through safe"
+    )
+    suggested_experiments: list[str] = Field(
+        description="Ordered by how much each raises the reachable tier per unit of effort"
+    )
+    reality_check: str = Field(
+        description="The one thing the researcher is most likely to be wrong about in "
+        "their own read of this data's ceiling"
+    )
+
+
 class WritingFingerprint(BaseModel):
     """The researcher's own writing habits, learned from their prior text."""
 

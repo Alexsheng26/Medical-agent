@@ -91,10 +91,18 @@ mra journal show hepatology
 ### 目标 3 · 数据评估与分节写作
 
 ```bash
+# 还没定投哪里：打分 + 排序推荐候选期刊
+mra assess data.csv --notes "n=12/组，两批独立队列"
+
+# 已经定了目标刊：对着该刊的门槛再评一次
 mra assess data.csv --journal Hepatology --notes "n=12/组，两批独立队列"
+
 mra draft results --journal Hepatology --data data.csv -o results.md
 mra finalize results.md --journal Hepatology     # 一步产出 v1 / v2 / 报告
 ```
+
+两种模式共用一条命令，按 `--journal` 在不在分派。**不带 `--journal` 是常态**——
+先看数据能打到哪一层，再决定投哪里。
 
 评估按五个维度打分（新颖性、机制深度、临床相关性、数据稳健性、故事紧凑度），
 **3 分是专业期刊的门槛线，5 分是顶级综合刊的门槛线**。输出包含：
@@ -102,7 +110,14 @@ mra finalize results.md --journal Hepatology     # 一步产出 v1 / v2 / 报告
 - 数据目前**最能站得住的那个 claim**
 - **过度声称清单**——你想写但审稿时撑不住的句子
 - 补实验建议，按"每单位工作量能抬高多少分"排序
-- 如果匹配度不够，直接给更合适的目标期刊
+- 推荐模式下：4–6 本候选刊，分**冲刺 / 现实 / 稳妥**三档，逐本说清"为什么是它"、
+  "这一本会额外要什么"、以及一句带条件的胜算判断；已有风格档案的会标出来，
+  没有的直接给出下一条要跑的 `mra journal add` 命令
+- 推荐模式下还有一条 **reality check**：你对自己数据天花板的判断里，最可能错的是哪一点
+
+**两种模式都会先检索你自己的知识库**，把最相关的十几篇喂给模型再打分。这是为了让
+"新颖性"这一项有据可依：如果库里已经有论文做过同一件事，它会指名道姓地引出来，而不是
+凭模型记忆给一个数字。库是空的时候，它会明说这一分是意见而非结论。
 
 ### 目标 4 · 长期沉淀
 
@@ -246,7 +261,8 @@ mra refs proposal.md            # 发现伪造引用时返回退出码 1，可�
 | `mra hypotheses` / `mra diff A B` | 版本列表 / 逐字段比较 | |
 | `mra proposal` | 生成 proposal | ✓ |
 | `mra journal add NAME` | 建立期刊风格档案 | ✓ |
-| `mra assess FILE --journal N` | 数据–期刊匹配度评估 | ✓ |
+| `mra assess FILE` | 五维打分 + 排序推荐候选期刊 | ✓ |
+| `mra assess FILE --journal N` | 对指定期刊的匹配度评估 | ✓ |
 | `mra draft SECTION` | 按期刊风格写某一节 | ✓ |
 | `mra nativize FILE` | 母语化改写 | ✓ |
 | `mra lint FILE` | AI 痕迹静态检查 | |
@@ -316,7 +332,7 @@ mra/
   pipeline.py     检索式规划 → 抓取 → 提炼
   dialogue.py     科学对话、假说版本化、proposal 生成
   journal.py      期刊风格建模
-  assess.py       数据–期刊匹配度评估
+  assess.py       数据打分 · 期刊推荐 · 匹配度评估
   writing.py      分节写作、母语化、去 AI 化迭代循环
   deai.py         AI 痕迹静态检测（确定性，离线）
   citations.py    引用真实性核验

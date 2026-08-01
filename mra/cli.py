@@ -30,8 +30,9 @@ GUIDE = """
   第二步 磨假说        mra chat                        # 多轮苏格拉底式对话
                        mra hypothesis --note "第一版"  # 冻结为可版本比较的假说
                        mra proposal -o proposal.md     # 生成 proposal 框架
-  第三步 学期刊        mra journal add "Hepatology" --samples ./samples/hepatology
-  第四步 评估数据      mra assess --journal Hepatology data.csv --notes "n=12/组"
+  第三步 定期刊        mra assess data.csv --notes "n=12/组" # 评分 + 排序推荐候选期刊
+                       mra journal add "Hepatology" --samples ./samples/hepatology
+  第四步 对标评估      mra assess data.csv --journal Hepatology  # 对着该刊门槛再评一次
   第五步 写作          mra draft results --journal Hepatology --data data.csv -o results.md
                        mra finalize results.md --journal Hepatology
   长期沉淀            mra fingerprint ./my_papers      # 学习你自己的文风
@@ -480,15 +481,25 @@ def cmd_journal_show(args, cfg: Config) -> int:
 
 
 def cmd_assess(args, cfg: Config) -> int:
+    """Two modes on one command, dispatched on whether a target is named.
+
+    Without --journal the question is "where should this go", which is the
+    question a researcher actually has before they have chosen; with it, the
+    question is "does this clear that journal's bar".
+    """
     with _store(cfg) as store:
         llm = _llm(cfg)
-        assessment = assess_mod.assess(
-            cfg, store, llm, args.journal, [Path(p) for p in args.data], notes=args.notes
-        )
-        print(assess_mod.format_assessment(assessment))
+        paths = [Path(p) for p in args.data]
+
+        if args.journal:
+            result = assess_mod.assess(cfg, store, llm, args.journal, paths, notes=args.notes)
+            print(assess_mod.format_assessment(result))
+        else:
+            result = assess_mod.recommend(cfg, store, llm, paths, notes=args.notes)
+            print(assess_mod.format_recommendation(result, store))
 
         if args.output:
-            path = _write_out(assess_mod.assessment_to_json(assessment), args.output, cfg, "")
+            path = _write_out(assess_mod.assessment_to_json(result), args.output, cfg, "")
             print(f"\nFull assessment written to {path}")
     return 0
 
@@ -734,9 +745,13 @@ def build_parser() -> argparse.ArgumentParser:
     jp.set_defaults(func=cmd_journal_show)
     jp.add_argument("name")
 
-    p = add("assess", cmd_assess, "Score your data against a journal's bar")
+    p = add("assess", cmd_assess, "Score your data, and pick a journal if you have not")
     p.add_argument("data", nargs="+", help="Data files (csv/tsv/txt/md)")
-    p.add_argument("--journal", required=True)
+    p.add_argument(
+        "--journal",
+        help="Score against this journal's stored profile. Omit to get ranked "
+        "journal recommendations instead.",
+    )
     p.add_argument("--notes", default="", help="Context the files do not carry")
     p.add_argument("-o", "--output", help="Also write the full assessment as JSON")
 
