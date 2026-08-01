@@ -46,7 +46,43 @@ GUIDE = """
 """
 
 
+def _force_utf8_output() -> None:
+    """Print UTF-8 regardless of the console's code page.
+
+    Windows picks the locale code page for a redirected stream, and cp936 — the
+    default on a Chinese install — cannot encode `✓ ✗ ⚠ ↻`. Without this,
+    `mra refs draft.md > out.txt` and the scheduled `mra sync >> sync.log` both
+    die on UnicodeEncodeError, which is exactly the unattended path where nobody
+    is watching. `errors="replace"` keeps a stream that cannot be reconfigured
+    (a pipe under some launchers) from taking the whole run down over a glyph.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):  # already detached, or not a real stream
+                pass
+
+
+def read_text(path: Path) -> str:
+    """Read a manuscript the researcher wrote, failing loudly on encoding.
+
+    Not `errors="replace"`: silently substituting characters in a manuscript
+    corrupts the text you are about to submit. A Word export saved as GBK on
+    Windows is common enough to deserve an instruction rather than a traceback.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise SystemExit(
+            f"{path} is not UTF-8 ({exc.reason} at byte {exc.start}).\n"
+            "Re-save it as UTF-8 — in Notepad, 文件 → 另存为 → 编码选 UTF-8; "
+            "in VS Code, click the encoding in the status bar → Save with Encoding."
+        ) from exc
+
+
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_output()
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -525,7 +561,7 @@ def cmd_nativize(args, cfg: Config) -> int:
     with _store(cfg) as store:
         llm = _llm(cfg)
         source = Path(args.file)
-        text = source.read_text(encoding="utf-8")
+        text = read_text(source)
         mem = memory_mod.Memory.load(cfg.memory_path)
 
         result = writing.nativize(cfg, store, llm, text, args.journal, memory=mem)
@@ -536,7 +572,7 @@ def cmd_nativize(args, cfg: Config) -> int:
 
 def cmd_lint(args, cfg: Config) -> int:
     """Deterministic AI-tell check. No API call, no key needed."""
-    text = Path(args.file).read_text(encoding="utf-8")
+    text = read_text(Path(args.file))
     print(deai.analyze(text).summary())
     return 0
 
@@ -544,7 +580,7 @@ def cmd_lint(args, cfg: Config) -> int:
 def cmd_polish(args, cfg: Config) -> int:
     llm = _llm(cfg)
     source = Path(args.file)
-    text = source.read_text(encoding="utf-8")
+    text = read_text(source)
 
     def on_round(index: int, before: float, after: float) -> None:
         print(f"  round {index}: {before:.1f} → {after:.1f}")
@@ -563,7 +599,7 @@ def cmd_finalize(args, cfg: Config) -> int:
     with _store(cfg) as store:
         llm = _llm(cfg)
         source = Path(args.file)
-        text = source.read_text(encoding="utf-8")
+        text = read_text(source)
         mem = memory_mod.Memory.load(cfg.memory_path)
 
         paths = writing.write_versions(
@@ -573,14 +609,14 @@ def cmd_finalize(args, cfg: Config) -> int:
         for label, path in paths.items():
             print(f"  {label:<7} {path}")
         print()
-        print(paths["report"].read_text(encoding="utf-8"))
+        print(read_text(paths["report"]))
     return 0
 
 
 def cmd_refs(args, cfg: Config) -> int:
     """Citation integrity check. No API call, no key needed."""
     with _store(cfg) as store:
-        text = Path(args.file).read_text(encoding="utf-8")
+        text = read_text(Path(args.file))
         report = citations.check(text, store)
         print(report.summary())
         if args.list:

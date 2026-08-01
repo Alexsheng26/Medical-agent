@@ -24,6 +24,10 @@ mra init --email your@email.edu            # NCBI 要求提供联系邮箱
 
 需要 Python ≥ 3.10。第三方依赖只有两个：`anthropic` 和 `pypdf`。
 
+> **第一次装、或者不熟命令行？** 看 **[docs/SETUP.md](docs/SETUP.md)** —— Windows /
+> macOS / Linux 分平台的完整步骤，含 API key 怎么申请、工作目录怎么组织、
+> 以及一份常见报错对照表。
+
 ---
 
 ## 5 分钟上手

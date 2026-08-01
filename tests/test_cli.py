@@ -174,10 +174,54 @@ def test_no_command_prints_help(workspace, capsys):
     assert "usage:" in capsys.readouterr().out
 
 
+class TestPortableIO:
+    """Windows defaults to a legacy code page for redirected output, and the
+    scheduled `mra sync >> sync.log` is exactly where nobody sees the crash."""
+
+    def test_output_survives_a_legacy_code_page(self):
+        import io
+        import sys
+
+        original = sys.stdout
+        sys.stdout = io.TextIOWrapper(io.BytesIO(), encoding="gbk")
+        try:
+            cli._force_utf8_output()
+            print("✓ ✗ ⚠ ↻")  # none of these exist in cp936/gbk
+            assert sys.stdout.encoding == "utf-8"
+        finally:
+            sys.stdout = original
+
+    def test_reconfigure_failure_is_not_fatal(self):
+        class Stubborn:
+            def reconfigure(self, **kwargs):
+                raise ValueError("underlying buffer has been detached")
+
+        import sys
+
+        original = sys.stdout
+        sys.stdout = Stubborn()
+        try:
+            cli._force_utf8_output()  # must not raise
+        finally:
+            sys.stdout = original
+
+    def test_non_utf8_manuscript_gets_an_instruction(self, tmp_path):
+        path = tmp_path / "draft.md"
+        path.write_bytes("研究结果显示".encode("gbk"))
+
+        with pytest.raises(SystemExit, match="not UTF-8"):
+            cli.read_text(path)
+
+    def test_utf8_manuscript_reads_normally(self, tmp_path):
+        path = tmp_path / "draft.md"
+        path.write_text("研究结果显示", encoding="utf-8")
+        assert cli.read_text(path) == "研究结果显示"
+
+
 class TestPrompts:
     def test_every_prompt_loads(self):
         for name in ["core", "query_plan", "extract", "dialogue", "hypothesis",
-                     "proposal", "journal_profile", "evaluate", "draft",
+                     "proposal", "journal_profile", "evaluate", "recommend", "draft",
                      "nativize", "deai_rewrite", "fingerprint"]:
             assert prompts.load(name), f"{name} is empty"
 
