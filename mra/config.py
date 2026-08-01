@@ -49,6 +49,10 @@ class Config:
     chat_language: str = "zh"
     retrieval_k: int = 12
 
+    # Override the built-in price snapshot, e.g. {"claude-opus-5": [5.0, 25.0]}.
+    # Useful when rates change or an institutional gateway bills differently.
+    prices: dict = field(default_factory=dict)
+
     @property
     def db_path(self) -> Path:
         return self.workspace / "knowledge.db"
@@ -56,6 +60,10 @@ class Config:
     @property
     def memory_path(self) -> Path:
         return self.workspace / "memory.json"
+
+    @property
+    def usage_path(self) -> Path:
+        return self.workspace / "usage.json"
 
     @property
     def drafts_dir(self) -> Path:

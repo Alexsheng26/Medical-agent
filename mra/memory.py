@@ -215,6 +215,7 @@ def build_fingerprint(
         WritingFingerprint,
         effort=cfg.effort,
         max_tokens=8000,
+        cache_upto=0,
     )
 
     payload = fingerprint.model_dump()

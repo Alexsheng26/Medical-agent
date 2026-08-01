@@ -17,6 +17,7 @@ from . import citations, deai, dialogue, journal as journal_mod, memory as memor
 from . import pipeline, writing
 from .config import Config
 from .llm import LLM, RefusalError
+from .usage import Ledger
 from .store import Store
 
 GUIDE = """
@@ -35,7 +36,7 @@ GUIDE = """
   长期沉淀            mra fingerprint ./my_papers      # 学习你自己的文风
                        mra memory --refresh            # 课题方向图谱
 
-  不需要 API key 的命令：import / lint / refs / memory / status / guide
+  不需要 API key 的命令：import / lint / refs / memory / usage / status / guide
 """
 
 
@@ -59,6 +60,13 @@ def main(argv: list[str] | None = None) -> int:
     cfg.ensure_workspace()
 
     try:
+        return _run(args, cfg)
+    finally:
+        _report_usage(args.command)
+
+
+def _run(args, cfg: Config) -> int:
+    try:
         return args.func(args, cfg)
     except RefusalError as exc:
         print(f"\nThe model declined this request: {exc}", file=sys.stderr)
@@ -76,7 +84,29 @@ def main(argv: list[str] | None = None) -> int:
         return 130
 
 
+def _report_usage(command: str) -> None:
+    """Print what this command cost. Runs even on failure — a command that
+    died half way through still spent money, and hiding that is worse than
+    the failure itself."""
+    if _LEDGER is None:
+        return
+    line = _LEDGER.line()
+    if line:
+        _LEDGER.save(command)
+        print(f"\n{line}", file=sys.stderr)
+
+
 # --------------------------------------------------------------------- helpers
+
+
+_LEDGER: Ledger | None = None
+
+
+def _ledger(cfg: Config) -> Ledger:
+    global _LEDGER
+    if _LEDGER is None:
+        _LEDGER = Ledger.load(cfg.usage_path, cfg.model, cfg.prices)
+    return _LEDGER
 
 
 def _llm(cfg: Config) -> LLM:
@@ -88,7 +118,7 @@ def _llm(cfg: Config) -> LLM:
             "(or run `ant auth login`). Commands that need no model — lint, refs, "
             "memory, status — work without it."
         )
-    return LLM(cfg)
+    return LLM(cfg, ledger=_ledger(cfg))
 
 
 def _store(cfg: Config) -> Store:
@@ -459,6 +489,13 @@ def cmd_memory(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_usage(args, cfg: Config) -> int:
+    """Token and cost accounting. No API call."""
+    ledger = Ledger.load(cfg.usage_path, cfg.model, cfg.prices)
+    print(ledger.report())
+    return 0
+
+
 def cmd_export(args, cfg: Config) -> int:
     """Dump the knowledge base as JSON so nothing is trapped in the tool."""
     with _store(cfg) as store:
@@ -596,6 +633,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = add("memory", cmd_memory, "Show the topic graph and fingerprint status")
     p.add_argument("--refresh", action="store_true", help="Rebuild from the knowledge base")
+
+    add("usage", cmd_usage, "Show token usage and what it has cost")
 
     p = add("export", cmd_export, "Export everything as JSON")
     p.add_argument("-o", "--output")

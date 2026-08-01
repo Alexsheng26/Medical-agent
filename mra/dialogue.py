@@ -29,7 +29,9 @@ def respond(cfg: Config, store: Store, llm: LLM, message: str) -> str:
     history = store.chat_history()
     history.append({"role": "user", "content": message})
 
-    result = llm.text(system, history)
+    # The dialogue block carries this turn's retrieval context; only the
+    # core prompt is stable enough to cache.
+    result = llm.text(system, history, cache_upto=0)
 
     store.append_chat("user", message)
     store.append_chat("assistant", result.text)
@@ -107,6 +109,7 @@ def write_proposal(cfg: Config, store: Store, llm: LLM, version: int | None = No
         system,
         [{"role": "user", "content": "Write the proposal."}],
         max_tokens=cfg.max_tokens,
+        cache_upto=0,
     )
 
     return result.text, citations.check(result.text, store)

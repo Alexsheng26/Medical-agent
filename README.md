@@ -182,9 +182,27 @@ mra refs proposal.md            # 发现伪造引用时返回退出码 1，可�
 | `mra refs FILE` | 引用真实性核对 | |
 | `mra fingerprint DIR` | 学习你的文风 | ✓ |
 | `mra memory --refresh` | 课题方向图谱 | |
+| `mra usage` | Token 用量与花费明细 | |
 | `mra export` | 全量导出 JSON | |
 
-`import` / `lint` / `refs` / `memory` / `status` / `guide` **完全离线**，没有 API key 也能跑。
+`import` / `lint` / `refs` / `memory` / `usage` / `status` / `guide` **完全离线**，没有 API key 也能跑。
+
+### 花费可见
+
+每条调用模型的命令结束后会打印本次花费，累计记在 `.mra/usage.json`：
+
+```
+usage: 1 call · in 11.4k · cache hit 876, saved ~$0.00 · out 369 · $0.063 · total $0.20
+```
+
+`mra usage` 看累计与最近命令明细。价格表是 2026-06 的快照，写死在 `mra/usage.py`；
+官方调价或你走机构网关时，在 `mra.config.json` 里覆盖：
+
+```json
+{ "prices": { "claude-opus-5": [5.0, 25.0] } }
+```
+
+缓存读按输入价的 0.1×、写按 1.25× 计——不区分的话，一次高命中率的运行会被算贵好几倍。
 
 ---
 

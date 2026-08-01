@@ -118,6 +118,32 @@ class TestTextRequestShape:
         assert "cache_control" not in system[0]
         assert system[1]["cache_control"] == {"type": "ephemeral"}
 
+    def test_cache_upto_keeps_volatile_blocks_outside_the_cached_prefix(self):
+        """When a later system block embeds per-request material, caching it is
+        worse than not caching: the entry is never reused and the 1.25x write
+        premium is paid on tokens that will never be read again."""
+        recorder = Recorder(message_response())
+        llm = make_llm(recorder, max_tokens=4000)
+
+        llm.text(
+            ["stable core rules", "retrieval context for THIS request only"],
+            [{"role": "user", "content": "hi"}],
+            cache_upto=0,
+        )
+
+        system = recorder.bodies[0]["system"]
+        assert system[0]["cache_control"] == {"type": "ephemeral"}
+        assert "cache_control" not in system[1]
+
+    def test_default_still_caches_the_whole_system_prompt(self):
+        recorder = Recorder(message_response())
+        llm = make_llm(recorder, max_tokens=4000)
+        llm.text(["a", "b"], [{"role": "user", "content": "hi"}])
+
+        system = recorder.bodies[0]["system"]
+        assert "cache_control" not in system[0]
+        assert system[1]["cache_control"] == {"type": "ephemeral"}
+
     def test_effort_override(self):
         recorder = Recorder(message_response())
         llm = make_llm(recorder, max_tokens=4000)
@@ -231,6 +257,24 @@ class TestParse:
         assert body["output_config"]["format"]["type"] == "json_schema"
         # Extraction runs at its own effort setting, not the conversational one.
         assert body["output_config"]["effort"] == "medium"
+
+
+class TestSystemBlockPlacement:
+    def test_index_is_clamped_to_the_available_blocks(self):
+        blocks = system_blocks("a", "b", cache_upto=99)
+        assert blocks[1]["cache_control"] == {"type": "ephemeral"}
+        assert "cache_control" not in blocks[0]
+
+    def test_negative_index_counts_from_the_end(self):
+        blocks = system_blocks("a", "b", "c", cache_upto=-2)
+        assert blocks[1]["cache_control"] == {"type": "ephemeral"}
+
+    def test_empty_parts_do_not_shift_the_index(self):
+        # "" is dropped, so index 0 must still land on "core".
+        blocks = system_blocks("core", "", "volatile", cache_upto=0)
+        assert blocks[0]["text"] == "core"
+        assert blocks[0]["cache_control"] == {"type": "ephemeral"}
+        assert len(blocks) == 2
 
 
 def test_system_blocks_ignores_empty_parts():

@@ -74,6 +74,7 @@ def draft(
         system,
         [{"role": "user", "content": f"Write the {section}."}],
         max_tokens=cfg.max_tokens,
+        cache_upto=0,
     )
     return result.text
 
@@ -102,6 +103,7 @@ def nativize(
         system,
         [{"role": "user", "content": "Rewrite the text."}],
         max_tokens=cfg.max_tokens,
+        cache_upto=0,
     )
     return result.text
 
@@ -136,6 +138,7 @@ def polish(
             system,
             [{"role": "user", "content": "Revise the text."}],
             max_tokens=cfg.max_tokens,
+            cache_upto=0,
         )
         candidate = _strip_fences(result.text)
         rounds += 1

@@ -115,6 +115,7 @@ def build_profile(
         JournalProfile,
         effort=cfg.effort,
         max_tokens=16000,
+        cache_upto=0,
     )
 
     payload = profile.model_dump()

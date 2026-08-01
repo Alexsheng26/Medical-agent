@@ -80,6 +80,7 @@ def assess(
         FitAssessment,
         effort=cfg.effort,
         max_tokens=16000,
+        cache_upto=0,
     )
 
     for dimension in assessment.dimensions:
