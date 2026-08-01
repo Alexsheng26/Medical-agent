@@ -53,6 +53,10 @@ class Config:
     # Useful when rates change or an institutional gateway bills differently.
     prices: dict = field(default_factory=dict)
 
+    # Spend ceiling for one unattended `mra sync`. Unattended plus metered
+    # billing needs a brake; this one is deliberately low.
+    default_max_cost: float = 2.00
+
     @property
     def db_path(self) -> Path:
         return self.workspace / "knowledge.db"
@@ -69,9 +73,14 @@ class Config:
     def drafts_dir(self) -> Path:
         return self.workspace / "drafts"
 
+    @property
+    def briefs_dir(self) -> Path:
+        return self.workspace / "briefs"
+
     def ensure_workspace(self) -> None:
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.drafts_dir.mkdir(parents=True, exist_ok=True)
+        self.briefs_dir.mkdir(parents=True, exist_ok=True)
 
     # --- persistence ---
 

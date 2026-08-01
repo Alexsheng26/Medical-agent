@@ -5,6 +5,7 @@ description = "Research intermediary agent for clinical and translational medici
 requires-python = ">=3.10"
 dependencies = [
     "anthropic>=0.120",
+    "pypdf>=4.0",
 ]
 
 [project.optional-dependencies]

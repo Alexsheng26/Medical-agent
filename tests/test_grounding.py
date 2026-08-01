@@ -198,3 +198,32 @@ class TestDataLoading:
     def test_missing_file_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             assess.load_data_description(tmp_path / "nope.csv")
+
+
+class TestLocalDocumentRendering:
+    """The model can only cite what the context tells it how to cite."""
+
+    def test_local_document_shows_the_local_marker(self, store):
+        store.add_articles([Article(pmid="local:a1b2c3d4", title="My PDF",
+                                    abstract="Full text of my own paper.")])
+        rendered = retrieval.render_article(store.get_article("local:a1b2c3d4"))
+        assert rendered.startswith("[LOCAL:a1b2c3d4]")
+
+    def test_local_document_declares_its_provenance(self, store):
+        store.add_articles([Article(pmid="local:a1b2c3d4", title="My PDF",
+                                    abstract="Full text.")])
+        rendered = retrieval.render_article(store.get_article("local:a1b2c3d4"))
+        assert "local full text" in rendered
+
+    def test_pubmed_records_are_unchanged(self, store):
+        rendered = retrieval.render_article(store.get_article("31234567"))
+        assert rendered.startswith("[PMID:31234567]")
+        assert "local full text" not in rendered
+
+    def test_mixed_context_carries_both_marker_types(self, store):
+        store.add_articles([Article(pmid="local:beef1234", title="My macrophage PDF",
+                                    abstract="Macrophage fibrosis portal findings.")])
+        context, ids = retrieval.build_context(store, "macrophage fibrosis portal")
+        assert "local:beef1234" in ids
+        assert "[LOCAL:beef1234]" in context
+        assert "[PMID:31234567]" in context

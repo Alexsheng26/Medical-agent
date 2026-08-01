@@ -70,6 +70,19 @@ CREATE TABLE IF NOT EXISTS chat (
     created_at  TEXT NOT NULL
 );
 
+-- Saved searches replayed by `mra sync`. The resolved query is stored, not the
+-- original topic: an unattended run must not re-plan the query each time, or it
+-- costs a model call per run and the search scope drifts without anyone seeing.
+CREATE TABLE IF NOT EXISTS watches (
+    name        TEXT PRIMARY KEY,
+    query       TEXT NOT NULL,
+    topic       TEXT NOT NULL DEFAULT '',
+    retmax      INTEGER NOT NULL DEFAULT 50,
+    created_at  TEXT NOT NULL,
+    last_run_at TEXT NOT NULL DEFAULT '',
+    last_added  INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_articles_year ON articles(year);
 CREATE INDEX IF NOT EXISTS idx_articles_topic ON articles(topic);
 """
@@ -241,6 +254,39 @@ class Store:
 
     def list_journals(self) -> list[str]:
         return [r["name"] for r in self.conn.execute("SELECT name FROM journals ORDER BY name")]
+
+    # -------------------------------------------------------------- watches
+
+    def add_watch(self, name: str, query: str, topic: str = "", retmax: int = 50) -> None:
+        self.conn.execute(
+            """INSERT OR REPLACE INTO watches
+               (name, query, topic, retmax, created_at, last_run_at, last_added)
+               VALUES (?,?,?,?,?,
+                       COALESCE((SELECT last_run_at FROM watches WHERE name = ?), ''),
+                       COALESCE((SELECT last_added  FROM watches WHERE name = ?), 0))""",
+            (name.lower(), query, topic, retmax, _now(), name.lower(), name.lower()),
+        )
+        self.conn.commit()
+
+    def list_watches(self) -> list[sqlite3.Row]:
+        return list(self.conn.execute("SELECT * FROM watches ORDER BY name"))
+
+    def get_watch(self, name: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM watches WHERE name = ?", (name.lower(),)
+        ).fetchone()
+
+    def remove_watch(self, name: str) -> bool:
+        cur = self.conn.execute("DELETE FROM watches WHERE name = ?", (name.lower(),))
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def mark_watch_run(self, name: str, added: int) -> None:
+        self.conn.execute(
+            "UPDATE watches SET last_run_at = ?, last_added = ? WHERE name = ?",
+            (_now(), added, name.lower()),
+        )
+        self.conn.commit()
 
     # ------------------------------------------------------------------ chat
 

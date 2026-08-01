@@ -14,7 +14,8 @@ from pathlib import Path
 
 from . import assess as assess_mod
 from . import citations, deai, dialogue, journal as journal_mod, memory as memory_mod
-from . import pipeline, writing
+from . import brief as brief_mod
+from . import ingest, pipeline, writing
 from .config import Config
 from .llm import LLM, RefusalError
 from .usage import Ledger
@@ -36,7 +37,11 @@ GUIDE = """
   长期沉淀            mra fingerprint ./my_papers      # 学习你自己的文风
                        mra memory --refresh            # 课题方向图谱
 
-  不需要 API key 的命令：import / lint / refs / memory / usage / status / guide
+  无人值守            mra watch add "NASH 纤维化"     # 保存检索式（只规划一次）
+                       mra sync --quiet --max-cost 2.00 # 挂 cron，写简报
+
+  不需要 API key 的命令：lint / refs / memory / usage / status / guide
+                        （import 处理 .xml 时也不需要）
 """
 
 
@@ -198,17 +203,128 @@ def cmd_search(args, cfg: Config) -> int:
 
 
 def cmd_import(args, cfg: Config) -> int:
-    """Load PubMed XML from disk. No API call, no network."""
+    """Load documents from disk: PubMed XML, PDFs, or plain text.
+
+    XML needs no model call. PDFs and text use one small call per file to read
+    the metadata off the front matter, unless --no-metadata is passed.
+    """
+    paths = [Path(p) for p in args.files]
+    needs_model = any(
+        p.suffix.lower() in (ingest.PDF_SUFFIXES | ingest.TEXT_SUFFIXES) for p in paths
+    )
+    llm = _llm(cfg) if (needs_model and not args.no_metadata) else None
+
     with _store(cfg) as store:
-        result = pipeline.import_xml(
-            store, [Path(p) for p in args.files], topic=args.topic
+        result = pipeline.import_files(
+            cfg, store, paths, llm=llm, topic=args.topic,
+            on_file=lambda path, n, warns: print(
+                f"  {path.name}: {n} record(s)" + ("  ⚠" if warns else "")
+            ),
         )
-        print(f"Read {result.found} records; {result.added} new, "
-              f"{result.skipped_no_abstract} skipped (no abstract).")
-        print(f"Knowledge base now holds {store.count_articles()} papers.")
+        print(f"\nRead {result.found}; {result.added} new, "
+              f"{result.skipped_no_abstract} skipped.")
+
+        if result.warnings:
+            print("\nNeeds attention:")
+            for warning in result.warnings:
+                print(f"  ! {warning}")
+
+        print(f"\nKnowledge base now holds {store.count_articles()} documents.")
         if result.added:
-            print("\nNext: `mra digest` to extract structured cards.")
+            print("Next: `mra digest` to extract structured cards.")
     return 0
+
+
+def cmd_watch_add(args, cfg: Config) -> int:
+    with _store(cfg) as store:
+        if args.query:
+            query = args.query
+        else:
+            # Plan once, here. `mra sync` replays the stored string verbatim so
+            # an unattended run costs no model call and cannot drift.
+            plan = pipeline.plan_query(_llm(cfg), args.topic, cfg.chat_language)
+            query = plan.pubmed_query
+            print(f"Planned query:\n  {query}\n  {plan.rationale}\n")
+
+        name = args.name or _slug(args.topic)
+        store.add_watch(name, query, topic=args.topic, retmax=args.max)
+        print(f"Watch '{name}' saved. `mra sync` will replay this query verbatim.")
+        print("Edit it any time with `mra watch add --name "
+              f"{name} --query '<new query>' \"{args.topic}\"`.")
+    return 0
+
+
+def cmd_watch_list(args, cfg: Config) -> int:
+    with _store(cfg) as store:
+        watches = store.list_watches()
+        if not watches:
+            print("No watches. Add one with `mra watch add \"<topic>\"`.")
+            return 0
+        for w in watches:
+            last = w["last_run_at"][:10] if w["last_run_at"] else "never"
+            print(f"  {w['name']:<16} last run {last}  (+{w['last_added']})  max {w['retmax']}")
+            print(f"    {w['query']}")
+    return 0
+
+
+def cmd_watch_remove(args, cfg: Config) -> int:
+    with _store(cfg) as store:
+        if store.remove_watch(args.name):
+            print(f"Removed watch '{args.name}'.")
+            return 0
+        print(f"No watch named '{args.name}'.", file=sys.stderr)
+        return 1
+
+
+def cmd_sync(args, cfg: Config) -> int:
+    """Replay every saved watch, extract what is new, write a brief.
+
+    Built for cron: idempotent, bounded by a spend ceiling, and tolerant of one
+    watch failing.
+    """
+    with _store(cfg) as store:
+        llm = _llm(cfg)
+        events: list[str] = []
+
+        result = pipeline.sync(
+            cfg, store, llm,
+            max_cost=args.max_cost if args.max_cost is not None else cfg.default_max_cost,
+            do_digest=not args.no_digest,
+            on_event=lambda m: (events.append(m), None if args.quiet else print(m))[1],
+        )
+
+        # Refresh the topic graph so the direction map keeps up on its own.
+        mem = memory_mod.Memory.load(cfg.memory_path)
+        mem.refresh_topics(store)
+        mem.save()
+
+        result.brief_path = brief_mod.write_brief(
+            cfg, store, None if args.no_digest else llm, result.new_ids,
+            watch_summary="\n".join(f"- {e}" for e in events),
+            errors=result.errors,
+        )
+
+        if result.new_ids or not args.quiet:
+            print(f"\n{len(result.new_ids)} new; {result.digested} extracted"
+                  + (f", {result.digest_failed} failed" if result.digest_failed else ""))
+            print(f"Brief: {result.brief_path}")
+
+        for error in result.errors:
+            print(f"  ! {error}", file=sys.stderr)
+
+        if result.stopped_on_budget:
+            ceiling = args.max_cost if args.max_cost is not None else cfg.default_max_cost
+            print(f"  ! Stopped at the ${ceiling:.2f} ceiling; "
+                  "re-run to continue where it left off.", file=sys.stderr)
+            return 2
+        return 1 if result.errors else 0
+
+
+def _slug(text: str) -> str:
+    import re
+
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower())[:24].strip("-")
+    return slug or "watch"
 
 
 def cmd_digest(args, cfg: Config) -> int:
@@ -551,9 +667,34 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max", type=int, default=50, help="Max records to retrieve")
     p.add_argument("--query", help="Use this PubMed query verbatim, skipping planning")
 
-    p = add("import", cmd_import, "Load PubMed XML saved from the browser (offline)")
-    p.add_argument("files", nargs="+", help="PubMed XML file(s)")
+    p = add("import", cmd_import, "Load PubMed XML, PDFs, or plain text from disk")
+    p.add_argument("files", nargs="+", help="Files: .xml (PubMed), .pdf, .txt, .md")
     p.add_argument("--topic", default="", help="Label these records with a topic")
+    p.add_argument("--no-metadata", action="store_true",
+                   help="Skip metadata extraction for PDFs/text (no API call)")
+
+    p = sub.add_parser("watch", help="Saved searches replayed by `mra sync`")
+    wsub = p.add_subparsers(dest="watch_command", required=True)
+
+    wp = wsub.add_parser("add", help="Save a search (plans the query once)")
+    wp.set_defaults(func=cmd_watch_add)
+    wp.add_argument("topic", help="Topic or clinical question")
+    wp.add_argument("--name", help="Short name (default: derived from the topic)")
+    wp.add_argument("--query", help="Use this PubMed query verbatim, skipping planning")
+    wp.add_argument("--max", type=int, default=50, help="Max records per run")
+
+    wp = wsub.add_parser("list", help="List saved watches")
+    wp.set_defaults(func=cmd_watch_list)
+
+    wp = wsub.add_parser("remove", help="Delete a watch")
+    wp.set_defaults(func=cmd_watch_remove)
+    wp.add_argument("name")
+
+    p = add("sync", cmd_sync, "Run every watch, extract what is new, write a brief")
+    p.add_argument("--max-cost", type=float, default=None,
+                   help="Stop once this much has been spent (default: from config)")
+    p.add_argument("--no-digest", action="store_true", help="Fetch only; do not extract")
+    p.add_argument("--quiet", action="store_true", help="Only speak when there is news")
 
     p = add("digest", cmd_digest, "Extract structured cards for stored articles")
     p.add_argument("--limit", type=int, help="Only process this many")

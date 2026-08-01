@@ -141,3 +141,45 @@ class WritingFingerprint(BaseModel):
     distinctive_traits: list[str] = Field(
         description="What makes this prose recognisably theirs rather than generic"
     )
+
+
+class LocalArticleMeta(BaseModel):
+    """Bibliographic metadata read off the front matter of a local document.
+
+    Every field is allowed to be empty. A working paper, a thesis chapter or a
+    badly-extracted scan genuinely may not carry a journal or a year, and an
+    invented one is worse than a blank.
+    """
+
+    title: str = Field(description="The paper's title, or empty if not determinable")
+    authors: list[str] = Field(
+        description="Author surnames with initials, e.g. 'Chen W'. Empty list if unreadable."
+    )
+    journal: str = Field(description="Journal or preprint server; empty if absent")
+    year: str = Field(description="Four-digit publication year; empty if absent")
+    doi: str = Field(description="DOI without the https://doi.org/ prefix; empty if absent")
+    pmid: str = Field(description="PMID if the document prints one; otherwise empty")
+    keywords: list[str] = Field(description="Author keywords or MeSH-like terms, if listed")
+    document_type: str = Field(
+        description="One of: research article, review, preprint, thesis, protocol, "
+        "conference abstract, other"
+    )
+
+
+class BriefImpact(BaseModel):
+    """How one newly-arrived paper bears on the researcher's current hypothesis."""
+
+    identifier: str = Field(description="The PMID or local: id of the paper being judged")
+    stance: str = Field(
+        description="One of: weakens, supports, reframes, unrelated. Use 'weakens' when "
+        "the finding would make a reviewer doubt the hypothesis, 'reframes' when it "
+        "neither supports nor contradicts but changes what the right question is."
+    )
+    reason: str = Field(
+        description="One or two sentences naming the specific finding that drives the "
+        "stance, with its effect size or direction where the paper reports one"
+    )
+    action: str = Field(
+        description="What the researcher should do about it, or empty when nothing is "
+        "needed. Be concrete: which experiment, which claim to soften, which paper to read."
+    )

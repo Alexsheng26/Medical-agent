@@ -90,7 +90,7 @@ class TestImport:
         assert run(["import", str(self.FIXTURE), "--topic", "fibrosis"], workspace) == 0
 
         out = capsys.readouterr().out
-        assert "Read 3 records; 2 new, 1 skipped" in out
+        assert "Read 3; 2 new, 1 skipped" in out
 
         with Store(workspace / "knowledge.db") as store:
             assert store.count_articles() == 2

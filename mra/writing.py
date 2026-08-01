@@ -206,11 +206,13 @@ def _fidelity_warnings(before: str, after: str) -> list[str]:
     """Catch a rewrite that quietly dropped data or citations."""
     warnings = []
 
-    pmids_before = set(citations.CITATION_RE.findall(before))
-    pmids_after = set(citations.CITATION_RE.findall(after))
-    if lost := pmids_before - pmids_after:
+    # find_citations covers both namespaces (PMID and local full text) and
+    # normalises them, which a raw regex over the pattern no longer does.
+    cited_before = set(citations.find_citations(before))
+    cited_after = set(citations.find_citations(after))
+    if lost := cited_before - cited_after:
         warnings.append(f"Rewrite dropped citations: {', '.join(sorted(lost))}")
-    if added := pmids_after - pmids_before:
+    if added := cited_after - cited_before:
         warnings.append(f"Rewrite introduced citations not in the source: {', '.join(sorted(added))}")
 
     # Strip citation markers first: a dropped PMID is already reported above, and

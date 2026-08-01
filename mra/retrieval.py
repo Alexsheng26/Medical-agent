@@ -36,9 +36,20 @@ def build_context(store: Store, query: str, k: int = 12) -> tuple[str, list[str]
 
 def render_article(article: Article, card: dict | None = None) -> str:
     """Render one paper. The structured card, when present, replaces the raw
-    abstract — it is denser and already filtered for what matters."""
+    abstract — it is denser and already filtered for what matters.
+
+    The first line shows the exact citation marker the model must copy. Local
+    full texts are flagged as such: their metadata came off a PDF rather than an
+    indexing database, and the extraction may have mangled tables and legends.
+    """
+    from .ingest import is_local, marker
+
+    header = f"{marker(article.pmid)} {article.title}"
+    if is_local(article.pmid):
+        header += "  [local full text — metadata extracted from the file itself]"
+
     lines = [
-        f"[PMID:{article.pmid}] {article.title}",
+        header,
         f"{article.journal_abbrev or article.journal} {article.year}"
         + (f" · {article.publication_types[0]}" if article.publication_types else ""),
     ]

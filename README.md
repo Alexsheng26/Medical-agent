@@ -22,7 +22,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."      # 必需（写入 ~/.bashrc 更方便
 mra init --email your@email.edu            # NCBI 要求提供联系邮箱
 ```
 
-需要 Python ≥ 3.10。唯一的第三方依赖是 `anthropic`。
+需要 Python ≥ 3.10。第三方依赖只有两个：`anthropic` 和 `pypdf`。
 
 ---
 
@@ -37,6 +37,8 @@ mra digest                                    # 逐篇结构化提炼
 
 # 网络到不了 NCBI？在浏览器里搜好，Send to → File → Format: XML，然后：
 mra import ~/Downloads/pubmed_result.xml --topic "NASH 纤维化"
+# 自己下载的文章也能进库——PDF 直接喂：
+mra import ~/papers/*.pdf --topic "NASH 纤维化"
 # 想先试试手感，仓库里有现成的 8 篇示例语料：
 mra import examples/demo_corpus.xml
 
@@ -114,6 +116,75 @@ mra export -o backup.json        # 全量导出，不锁定在工具里
 
 ---
 
+## 自有文献入库
+
+`mra import` 收三种文件，按后缀自动分派：
+
+| 类型 | 说明 | 需要 API |
+|---|---|:---:|
+| `.xml` | PubMed 的 `Send to → File → Format: XML` | |
+| `.pdf` | 本地提取文本，模型读一次首页抽元数据（约 $0.02/篇） | ✓ |
+| `.txt` / `.md` | 同上，省掉提取步骤 | ✓ |
+
+加 `--no-metadata` 可跳过元数据抽取，完全离线，代价是标题只能用文件名。
+
+**本地文献用 `[LOCAL:xxxxxxxx]` 引用**，因为它们没有 PMID。ID 由正文内容哈希而来，
+所以同一篇论文换个文件名重新导入不会产生第二条记录。核验规则完全一样——
+`mra refs` 对两种标记一视同仁，查不到就是伪造：
+
+```
+Citations: 4 referenced, 2 verified against the knowledge base.
+  ✗ NOT IN KNOWLEDGE BASE: 99999999, local:deadbeef
+```
+
+**关于 PDF 的老实话：** 转文本质量参差。正文一般可用，多栏排版、表格、图注经常乱。
+提取不足 500 字符会被判为扫描件并明确报告「需要 OCR」，不会静默入库。
+本地条目在送给模型时会标注 `[local full text]`，让它知道这不是经过索引的摘要。
+
+---
+
+## 无人值守运行
+
+文献是持续产出的。靠人记得每周跑一次检索，这件事注定会被忘掉。
+
+```bash
+mra watch add "NASH 门脉纤维化 巨噬细胞" --name nash --max 40
+mra watch list
+mra sync --quiet --max-cost 2.00
+```
+
+**检索式只规划一次。** `watch add` 时用模型生成检索式并存下来，`sync` 之后逐字重放。
+理由：无人值守时每次重新规划要花钱、结果不确定、而且检索范围会在没人察觉时漂移。
+要改检索式就显式改：`mra watch add --name nash --query '<新检索式>' "主题"`。
+
+**两个闸：**
+- `--max-cost` 到达上限就干净停下（退出码 2），已抓取的文献保留，下次接着提炼
+- 单个 watch 失败不影响其他 watch，错误进简报和 stderr
+
+**简报才是重点。** 知识库自己悄悄变大没有意义。每次 sync 在 `.mra/briefs/YYYY-MM-DD.md`
+写一份，按「削弱假说 → 改变问题 → 支持 → 无关」排序——**削弱的排最前面**。
+你周一早上要看的就是这个。
+
+### 挂到定时任务
+
+```cron
+# 每周一早上 7 点。注意开头的 `. $HOME/.mra-env`——cron 几乎不继承环境变量，
+# ANTHROPIC_API_KEY 拿不到是定时任务静默失败的头号原因。
+0 7 * * 1 . $HOME/.mra-env && cd $HOME/research && mra sync --quiet --max-cost 2.00 >> $HOME/.mra/sync.log 2>&1
+```
+
+`~/.mra-env` 里就一行：`export ANTHROPIC_API_KEY="sk-ant-..."`（记得 `chmod 600`）。
+
+**macOS** 用 launchd 更可靠（cron 在新版 macOS 上需要额外授权）：把同样的命令包成一个
+`.sh`，写一份 `~/Library/LaunchAgents/com.mra.sync.plist`，`launchctl load` 加载。
+
+**Windows** 用任务计划程序，操作填 `cmd /c "mra sync --quiet --max-cost 2.00"`，
+并在「环境」里确认 `ANTHROPIC_API_KEY` 是**系统级**变量而非仅当前用户会话。
+
+先用 `mra sync --no-digest` 手工跑一次确认检索式对，再挂定时。
+
+---
+
 ## 母语化与去 AI 化
 
 两步分开，因为它们解决的是不同问题。
@@ -166,7 +237,9 @@ mra refs proposal.md            # 发现伪造引用时返回退出码 1，可�
 | `mra guide` | 中文流程速查 | |
 | `mra status` | 当前工作区概况 | |
 | `mra search TOPIC` | 规划检索式并抓取 PubMed | ✓ |
-| `mra import FILE.xml` | 导入浏览器保存的 PubMed XML（离线） | |
+| `mra import FILE...` | 导入 PubMed XML / PDF / 纯文本 | XML 不需要 |
+| `mra watch add/list/remove` | 保存检索式（供 sync 重放） | add 需要 |
+| `mra sync` | 跑完所有 watch，提炼新文献，写简报 | ✓ |
 | `mra digest` | 逐篇结构化提炼 | ✓ |
 | `mra chat [MSG]` | 科学对话（省略 MSG 进入交互） | ✓ |
 | `mra hypothesis` | 冻结为带版本的假说 | ✓ |
@@ -248,9 +321,12 @@ mra/
   deai.py         AI 痕迹静态检测（确定性，离线）
   citations.py    引用真实性核验
   memory.py       方向图谱 + 写作指纹
+  ingest.py       PDF/纯文本提取、本地 ID
+  brief.py        同步简报
+  usage.py        Token 用量与花费
   prompts/*.md    所有提示词，Markdown 明文，可直接改
 examples/         示例语料（可直接 mra import）
-tests/            136 个测试，全部离线运行
+tests/            217 个测试，全部离线运行
 docs/PROPOSAL.md  条款式 + 提纲式方案书
 ```
 
@@ -263,7 +339,7 @@ docs/PROPOSAL.md  条款式 + 提纲式方案书
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q          # 136 passed，不需要 API key 和网络
+python -m pytest -q          # 217 passed，不需要 API key 和网络
 ```
 
 测试覆盖：PubMed XML 解析、FTS5 检索与排序、假说版本化、AI 痕迹评分与句子切分、
