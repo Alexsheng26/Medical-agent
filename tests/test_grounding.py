@@ -53,7 +53,7 @@ class TestRetrieval:
         with Store(tmp_path / "empty.db") as empty:
             context, pmids = retrieval.build_context(empty, "anything")
             assert pmids == []
-            assert "no matching papers" in context
+            assert "knowledge base is empty" in context
 
     def test_card_replaces_the_raw_abstract(self, store):
         store.save_card(
@@ -79,6 +79,22 @@ class TestRetrieval:
     def test_respects_the_retrieval_limit(self, store):
         _, pmids = retrieval.build_context(store, "fibrosis cells liver", k=1)
         assert len(pmids) == 1
+
+    def test_unmatched_query_falls_back_to_recent(self, store):
+        """A Chinese question about an English corpus scores zero on every
+        paper. Reporting an empty knowledge base when two papers are sitting
+        in it is the wrong answer."""
+        context, pmids = retrieval.build_context(store, "这两篇讲了什么")
+        assert len(pmids) == 2
+        assert "31234567" in pmids
+
+    def test_fallback_declares_that_relevance_is_unproven(self, store):
+        context, _ = retrieval.build_context(store, "这两篇讲了什么")
+        assert "has NOT been established" in context
+
+    def test_a_real_match_is_not_labelled_as_a_fallback(self, store):
+        context, _ = retrieval.build_context(store, "macrophage fibrosis TGF")
+        assert "matched nothing" not in context
 
     def test_render_pmid_list_skips_unknown(self, store):
         rendered = retrieval.render_pmid_list(store, ["31234567", "99999999"])
@@ -227,3 +243,29 @@ class TestLocalDocumentRendering:
         assert "local:beef1234" in ids
         assert "[LOCAL:beef1234]" in context
         assert "[PMID:31234567]" in context
+
+
+class TestDigestTrimming:
+    """A 67k-character paper truncated at 24k loses Results and Discussion —
+    where the numbers and the authors' own caveats are."""
+
+    def test_short_text_is_untouched(self):
+        from mra.pipeline import _trim_for_digest
+        assert _trim_for_digest("short abstract") == "short abstract"
+
+    def test_long_paper_keeps_both_ends(self):
+        from mra.pipeline import DIGEST_TEXT_LIMIT, _trim_for_digest
+
+        text = "HEAD" + "x" * (DIGEST_TEXT_LIMIT * 3) + "TAIL"
+        trimmed = _trim_for_digest(text)
+
+        assert trimmed.startswith("HEAD")
+        assert trimmed.endswith("TAIL")
+        assert "omitted from the middle" in trimmed
+
+    def test_budget_is_respected(self):
+        from mra.pipeline import DIGEST_TEXT_LIMIT, _trim_for_digest
+
+        trimmed = _trim_for_digest("y" * (DIGEST_TEXT_LIMIT * 4))
+        body = trimmed.split("[...")[0] + trimmed.split("...]")[-1]
+        assert len(body) <= DIGEST_TEXT_LIMIT + 10

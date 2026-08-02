@@ -182,3 +182,77 @@ class TestMarkers:
 
     def test_pmid_marker(self):
         assert ingest.marker("31234567") == "[PMID:31234567]"
+
+
+class TestFrontMatterWindow:
+    """Two-column publisher PDFs emit body text ahead of the title block, so the
+    front matter is often not at the front of the extracted text."""
+
+    def test_front_is_the_first_page_not_the_first_n_characters(self, tmp_path):
+        pypdf = pytest.importorskip("pypdf")
+        from pypdf import PdfWriter
+
+        # Page 1 long enough to exceed FRONT_MIN_CHARS; page 2 must not be pulled in.
+        page1 = "Title line about hepatic macrophages. " * 60
+        page2 = "Discussion text that belongs to page two only. " * 60
+        path = _two_page_pdf(tmp_path / "paper.pdf", page1, page2)
+
+        doc = ingest.extract(path)
+
+        assert "page two only" not in doc.front
+        assert len(doc.front) <= ingest.FRONT_MAX_CHARS
+
+    def test_sparse_first_page_falls_through_to_the_second(self, tmp_path):
+        pytest.importorskip("pypdf")
+        path = _two_page_pdf(tmp_path / "cover.pdf", "Offprint.", "Real title. " * 200)
+
+        doc = ingest.extract(path)
+
+        assert "Real title" in doc.front, "a cover sheet must not be the whole window"
+
+    def test_text_files_keep_the_character_window(self, tmp_path):
+        path = tmp_path / "paper.txt"
+        path.write_text("A" * 10_000, encoding="utf-8")
+        assert len(ingest.extract(path).front) == ingest.METADATA_WINDOW
+
+
+def _two_page_pdf(path, page1_text, page2_text):
+    """Two pages carrying real text layers, built without a binary fixture."""
+    def stream(text):
+        lines = [text[i:i + 90] for i in range(0, len(text), 90)][:45]
+        body = ["BT", "/F1 10 Tf", "40 750 Td"]
+        for index, line in enumerate(lines):
+            if index:
+                body.append("0 -16 Td")
+            body.append(f"({line}) Tj")
+        body.append("ET")
+        return "\n".join(body).encode("latin-1")
+
+    contents = [stream(page1_text), stream(page2_text)]
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R "
+        b"/Resources << /Font << /F1 7 0 R >> >> >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R "
+        b"/Resources << /Font << /F1 7 0 R >> >> >>",
+        b"<< /Length " + str(len(contents[0])).encode() + b" >>\nstream\n" + contents[0] + b"\nendstream",
+        b"<< /Length " + str(len(contents[1])).encode() + b" >>\nstream\n" + contents[1] + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, obj in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += str(number).encode() + b" 0 obj\n" + obj + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 " + str(len(objects) + 1).encode() + b"\n0000000000 65535 f \n"
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode()
+    out += (
+        b"trailer\n<< /Size " + str(len(objects) + 1).encode() + b" /Root 1 0 R >>\n"
+        b"startxref\n" + str(xref).encode() + b"\n%%EOF\n"
+    )
+    path.write_bytes(bytes(out))
+    return path

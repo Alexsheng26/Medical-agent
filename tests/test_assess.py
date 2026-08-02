@@ -156,7 +156,7 @@ class TestGrounding:
         with Store(tmp_path / "empty.db") as empty:
             llm = StubLLM(_recommendation())
             assess.recommend(Config(), empty, llm, [data_file], notes="fibrosis")
-            assert "no matching papers" in "\n".join(llm.system)
+            assert "knowledge base is empty" in "\n".join(llm.system)
 
     def test_every_placeholder_is_filled(self, store, data_file):
         llm = StubLLM(_recommendation())

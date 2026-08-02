@@ -183,6 +183,18 @@ class Store:
                 results.append((article, -float(row["rank"])))
         return results
 
+    def recent_articles(self, limit: int = 12) -> list[Article]:
+        """The most recently added papers, newest first.
+
+        The fallback when lexical retrieval finds nothing — which happens on
+        every Chinese-language question about an English corpus, since BM25
+        matches characters and the two share none.
+        """
+        rows = self.conn.execute(
+            "SELECT pmid FROM articles ORDER BY added_at DESC, rowid DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [a for a in (self.get_article(r["pmid"]) for r in rows) if a]
+
     # ---------------------------------------------------------------- cards
 
     def save_card(self, pmid: str, payload: dict[str, Any]) -> None:

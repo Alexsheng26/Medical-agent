@@ -37,6 +37,16 @@ MIN_USABLE_CHARS = 500
 # title, authors, journal and DOI; the rest is wasted tokens for this purpose.
 METADATA_WINDOW = 3000
 
+# For a PDF the window is the first page rather than the first N characters.
+# Two-column publisher layouts emit body text ahead of the title block in the
+# content stream, so the front matter is often not at the front of the extracted
+# text — in one Springer paper the title landed at character 3751. The page is
+# the unit that actually means "front matter"; a character count only guesses at
+# it. These bounds cover a title page that is mostly whitespace (fall through to
+# page 2) and one that is unusually dense (stop before the budget runs away).
+FRONT_MIN_CHARS = 1200
+FRONT_MAX_CHARS = 9000
+
 _ID_RE = re.compile(r"\b(?:PMID|pmid)[:\s]*(\d{4,9})\b")
 _DOI_RE = re.compile(r"\b(10\.\d{4,9}/[-._;()/:A-Za-z0-9]+)\b")
 
@@ -50,6 +60,7 @@ class ExtractedDoc:
     kind: str  # "pdf" | "text"
     pages: int = 0
     warnings: list[str] = field(default_factory=list)
+    front: str = ""  # the window that carries title, authors, journal, DOI
 
     @property
     def usable(self) -> bool:
@@ -71,8 +82,8 @@ def extract(path: Path) -> ExtractedDoc:
     if suffix in PDF_SUFFIXES:
         return _extract_pdf(path)
     if suffix in TEXT_SUFFIXES:
-        text = path.read_text(encoding="utf-8", errors="replace")
-        doc = ExtractedDoc(path=path, text=_clean(text), kind="text")
+        text = _clean(path.read_text(encoding="utf-8", errors="replace"))
+        doc = ExtractedDoc(path=path, text=text, kind="text", front=text[:METADATA_WINDOW])
         if not doc.usable:
             doc.warnings.append(f"only {len(doc.text)} characters — too short to be a paper")
         return doc
@@ -111,6 +122,7 @@ def _extract_pdf(path: Path) -> ExtractedDoc:
 
     doc.pages = len(reader.pages)
     doc.text = _clean("\n".join(chunks))
+    doc.front = _front_matter(chunks)
 
     if not doc.usable:
         doc.warnings.append(
@@ -118,6 +130,21 @@ def _extract_pdf(path: Path) -> ExtractedDoc:
             "like a scan with no text layer. It needs OCR before it can be used."
         )
     return doc
+
+
+def _front_matter(pages: list[str]) -> str:
+    """The pages that plausibly carry title, authors, journal and DOI.
+
+    Page one, plus page two when page one is too sparse to be a real first page
+    (a cover sheet, a rights stamp, an offprint banner). Bounded so a dense
+    two-column opener does not spend the whole extraction budget.
+    """
+    window = ""
+    for page in pages[:2]:
+        window = _clean(f"{window}\n{page}")
+        if len(window) >= FRONT_MIN_CHARS:
+            break
+    return window[:FRONT_MAX_CHARS]
 
 
 def _clean(text: str) -> str:
@@ -151,9 +178,11 @@ def sniff_identifiers(text: str) -> tuple[str, str]:
     """Look for a PMID and DOI in the raw text before spending a model call.
 
     Publisher PDFs very often print both on the first page, so this resolves a
-    good fraction of documents for free.
+    good fraction of documents for free. Callers normally pass `doc.front`,
+    which is already scoped to that page; the cap here only bounds a caller that
+    hands over the whole document.
     """
-    window = text[:METADATA_WINDOW]
+    window = text[:FRONT_MAX_CHARS]
     pmid_match = _ID_RE.search(window)
     doi_match = _DOI_RE.search(window)
     doi = doi_match.group(1).rstrip(".,;)") if doi_match else ""

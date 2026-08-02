@@ -20,6 +20,28 @@ log = logging.getLogger(__name__)
 # token cost keeps climbing.
 DIGEST_TEXT_LIMIT = 24000
 
+# How the budget is spent when a paper exceeds it. Head-only truncation looked
+# reasonable until a 67k-character paper was digested and the card said "the
+# abstract does not give r values" — 24k of that paper is title, abstract,
+# introduction and methods, and Results never arrived. Results and Discussion
+# are where the numbers and the authors' own caveats live, so the tail is worth
+# more per character than the middle of the Methods.
+DIGEST_HEAD_SHARE = 0.55
+
+
+def _trim_for_digest(text: str) -> str:
+    """Keep the opening and the closing of a long paper, drop the middle."""
+    if len(text) <= DIGEST_TEXT_LIMIT:
+        return text
+    head = int(DIGEST_TEXT_LIMIT * DIGEST_HEAD_SHARE)
+    tail = DIGEST_TEXT_LIMIT - head
+    return (
+        f"{text[:head]}\n\n"
+        f"[... {len(text) - DIGEST_TEXT_LIMIT} characters omitted from the middle "
+        f"of the paper — typically detailed methods ...]\n\n"
+        f"{text[-tail:]}"
+    )
+
 
 @dataclass
 class SearchResult:
@@ -162,7 +184,7 @@ def _local_article(cfg: Config, doc: ingest.ExtractedDoc, llm: LLM | None):
     A printed PMID or DOI is used when present — it is free and exact. Only when
     neither is found does this spend a model call on the front matter.
     """
-    pmid, doi = ingest.sniff_identifiers(doc.text)
+    pmid, doi = ingest.sniff_identifiers(doc.front or doc.text)
 
     meta = None
     if llm is not None:
@@ -170,7 +192,7 @@ def _local_article(cfg: Config, doc: ingest.ExtractedDoc, llm: LLM | None):
             meta = llm.parse(
                 [
                     prompts.core(cfg.chat_language),
-                    prompts.load("local_meta", text=doc.text[: ingest.METADATA_WINDOW]),
+                    prompts.load("local_meta", text=doc.front or doc.text[: ingest.METADATA_WINDOW]),
                 ],
                 [{"role": "user", "content": f"Extract metadata for {doc.path.name}."}],
                 LocalArticleMeta,
@@ -230,17 +252,15 @@ def digest(
         if article is None:
             continue
 
-        body = article.abstract
-        truncated = len(body) > DIGEST_TEXT_LIMIT
-        if truncated:
-            body = body[:DIGEST_TEXT_LIMIT]
+        truncated = len(article.abstract) > DIGEST_TEXT_LIMIT
+        body = _trim_for_digest(article.abstract)
 
         content = (
             f"PMID: {article.pmid}\n"
             f"Journal: {article.journal} ({article.year})\n"
             f"Publication types: {', '.join(article.publication_types) or 'unspecified'}\n"
             f"Title: {article.title}\n\n"
-            f"{'Full text (truncated)' if truncated else 'Abstract'}:\n{body}"
+            f"{'Full text (abridged)' if truncated else 'Abstract'}:\n{body}"
         )
         try:
             card = llm.parse(system, [{"role": "user", "content": content}], LitCard)
