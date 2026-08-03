@@ -95,6 +95,33 @@ class TestPolishLoop:
         assert "AI-tell lint score" in system_text, "the rewrite must be lint-driven"
         assert "stock phrase" in system_text
 
+    def test_drift_in_a_kept_round_reaches_the_researcher(self, cfg):
+        """A cleaner rewrite that quietly drops a p-value is the dangerous case:
+        the score improves, the text is kept, and the loss is invisible unless
+        the warning travels all the way out to the summary that gets printed."""
+        source = (
+            "In the realm of fibrosis, it is worth noting that deletion cut "
+            "Sirius red area by 38% (p = 0.002) [PMID:31234567]. Furthermore, "
+            "this intricate interplay cannot be overstated in this context."
+        )
+        lossy = "Deletion cut Sirius red area by 38%."
+
+        result = writing.polish(cfg, StubLLM([lossy]), source, target=1.0, max_rounds=1)
+
+        assert result.text == lossy, "the improved text was kept"
+        assert any("31234567" in w for w in result.warnings)
+        assert any("0.002" in w for w in result.warnings)
+        assert "⚠" in result.summary(), "the warning must survive into what is printed"
+
+    def test_a_discarded_round_does_not_report_its_drift(self, cfg):
+        """Warning about content lost in a rewrite that was thrown away would
+        send the researcher hunting for a problem that is not in their file."""
+        result = writing.polish(
+            cfg, StubLLM([SLOPPY + SLOPPY]), SLOPPY, target=1.0, max_rounds=1
+        )
+        assert result.text == SLOPPY
+        assert result.warnings == []
+
     def test_progress_callback_fires(self, cfg):
         seen = []
         llm = StubLLM([CLEAN])
