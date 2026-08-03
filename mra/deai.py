@@ -211,6 +211,10 @@ ANNOTATION_RE = re.compile(
 # Structural markup, stripped so that the words survive but the syntax does not.
 # `### Septal density rises with stage` is a heading whose words belong to the
 # document's voice; `###` is not the sentence's first word.
+# Share of sentences that may open on the same word before it reads as a tic.
+# "The" sits around 8-12% in real papers; well past that is a pattern.
+REPEATED_OPENER_RATE = 0.15
+
 _MARKDOWN_LINE_RE = re.compile(r"^\s*(?:#{1,6}\s+|[-*+]\s+|>\s?|\d+\.\s+)", re.MULTILINE)
 _EMPHASIS_RE = re.compile(r"(\*{1,3}|_{2,3})(?=\S)(.+?)(?<=\S)\1", re.DOTALL)
 
@@ -342,18 +346,25 @@ def analyze(text: str) -> DeAIReport:
         )
 
     # --- 7. repeated sentence openings ---------------------------------------
+    # Rate, not raw count. "The" opens 8% of sentences in ordinary academic
+    # prose, so a 4000-word proposal trips a count threshold that a 300-word
+    # abstract never would — and the advice ("recast some of them") is wrong
+    # for 8%. Since `polish` acts on these findings, wrong advice gets applied.
     first_words = [s.split()[0].lower() for s in sentences if s.split()]
-    repeats = {w: first_words.count(w) for w in set(first_words) if first_words.count(w) >= 4}
-    if repeats:
-        worst = max(repeats.items(), key=lambda kv: kv[1])
-        findings.append(
-            Finding(
-                kind="repeated openings",
-                detail=f"{worst[1]} sentences begin with '{worst[0]}'",
-                weight=2.0 * worst[1],
-                suggestion="Recast some of them to lead with the subject or the finding.",
+    if len(first_words) >= 8:
+        worst_word = max(set(first_words), key=first_words.count)
+        count = first_words.count(worst_word)
+        rate = count / len(first_words)
+        if count >= 4 and rate > REPEATED_OPENER_RATE:
+            findings.append(
+                Finding(
+                    kind="repeated openings",
+                    detail=f"{count}/{len(first_words)} sentences begin with '{worst_word}' "
+                    f"({rate * 100:.0f}%)",
+                    weight=40.0 * (rate - REPEATED_OPENER_RATE),
+                    suggestion="Recast some of them to lead with the subject or the finding.",
+                )
             )
-        )
 
     # --- 8. nominalisation density -------------------------------------------
     nominal = [w for w in words if re.search(r"(tion|ment|ance|ence|ity|ness)$", w.lower())]

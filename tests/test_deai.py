@@ -172,6 +172,36 @@ class TestAnnotationsAreNotProse:
         without = "Septal density rose with fibrosis stage."
         assert deai.strip_annotations(with_marker).split() == without.split()
 
+    def test_ordinary_the_rate_in_a_long_document_is_not_a_finding(self):
+        """'The' opens ~8% of sentences in real academic prose. A raw count
+        threshold fires on document length rather than on style — and since
+        polish acts on findings, the wrong advice gets applied."""
+        subjects = [
+            "Density", "Staining", "Counts", "Sections", "Fibrosis", "Collagen",
+            "Readers", "Slides", "Controls", "Biopsies", "Analysis", "Sampling",
+        ]
+        varied = []
+        for i in range(200):
+            if i % 12 == 0:  # ~8%, the ordinary rate for "The" in academic prose
+                varied.append("The septal compartment carried most of the signal here.")
+            else:
+                varied.append(f"{subjects[i % len(subjects)]} rose with stage in {i} cases.")
+        text = " ".join(varied)
+
+        openers = [s.split()[0].lower() for s in deai.split_sentences(text)]
+        assert 0.05 < openers.count("the") / len(openers) < 0.12, "an ordinary rate"
+        assert "repeated openings" not in {f.kind for f in deai.analyze(text).findings}
+
+    def test_a_genuine_tic_still_fires(self):
+        sentences = ["The result held."] * 8 + ["Density rose with stage."] * 12
+        report = deai.analyze(" ".join(sentences))
+        assert "repeated openings" in {f.kind for f in report.findings}
+
+    def test_the_finding_reports_the_rate_not_just_the_count(self):
+        report = deai.analyze(" ".join(["The result held."] * 8 + ["Density rose."] * 12))
+        detail = next(f.detail for f in report.findings if f.kind == "repeated openings")
+        assert "%" in detail, "a bare count hides whether this is a rate worth acting on"
+
     def test_markdown_headings_are_not_sentence_openings(self):
         """`4 sentences begin with '###'` is a fact about the file format."""
         text = "\n\n".join(
