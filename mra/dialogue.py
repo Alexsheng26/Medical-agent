@@ -20,7 +20,7 @@ def respond(cfg: Config, store: Store, llm: LLM, message: str) -> str:
     if latest:
         query = f"{message} {latest[1].get('title', '')}"
 
-    context, _pmids = retrieval.build_context(store, query, k=cfg.retrieval_k)
+    context, _pmids = retrieval.build_context(store, query, k=cfg.retrieval_k, cfg=cfg, llm=llm)
 
     system = [
         prompts.core(cfg.chat_language),
@@ -46,7 +46,7 @@ def consolidate(cfg: Config, store: Store, llm: LLM, note: str = "") -> tuple[in
 
     transcript = "\n\n".join(f"[{turn['role']}] {turn['content']}" for turn in history)
     context, _ = retrieval.build_context(
-        store, transcript[-4000:], k=max(cfg.retrieval_k, 16)
+        store, transcript[-4000:], k=max(cfg.retrieval_k, 16), cfg=cfg, llm=llm
     )
 
     previous = store.latest_hypothesis()
@@ -95,7 +95,7 @@ def write_proposal(cfg: Config, store: Store, llm: LLM, version: int | None = No
             ],
         )
     )
-    context, _ = retrieval.build_context(store, seed, k=max(cfg.retrieval_k, 20))
+    context, _ = retrieval.build_context(store, seed, k=max(cfg.retrieval_k, 20), cfg=cfg, llm=llm)
 
     system = [
         prompts.core(cfg.chat_language),

@@ -64,7 +64,7 @@ def draft(
     """
     profile = journal_mod.profile_text(store, journal)
     query = context_query or data_text[:2000]
-    context, _ = retrieval.build_context(store, query, k=cfg.retrieval_k)
+    context, _ = retrieval.build_context(store, query, k=cfg.retrieval_k, cfg=cfg, llm=llm)
 
     system = [
         prompts.core(cfg.chat_language),

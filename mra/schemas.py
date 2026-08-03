@@ -27,6 +27,20 @@ class QueryPlan(BaseModel):
     rationale: str = Field(description="Why this strategy covers the question")
 
 
+class SearchTerms(BaseModel):
+    """English keywords standing in for a question the index cannot match.
+
+    The knowledge base is English and searched literally, so a Chinese question
+    scores zero on every paper in it.
+    """
+
+    terms: list[str] = Field(
+        description="5-15 English search terms a paper on this topic would "
+        "contain, including gene/protein symbols and common synonyms. Empty if "
+        "the question has no searchable scientific subject."
+    )
+
+
 class LitCard(BaseModel):
     """Structured summary of one paper (Clause 1.3)."""
 

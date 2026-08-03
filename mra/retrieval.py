@@ -7,24 +7,77 @@ in `citations.py` meaningful rather than decorative.
 
 from __future__ import annotations
 
+import logging
+import re
+
 from .pubmed import Article
 from .store import Store
 
+log = logging.getLogger(__name__)
 
-def build_context(store: Store, query: str, k: int = 12) -> tuple[str, list[str]]:
+# Han, kana and Hangul. The trigger is deliberately the script, not a failed
+# search: a question written in Chinese cannot match an English corpus, so
+# spending a search to discover that first only wastes a round trip.
+_NON_LATIN_RE = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯]")
+
+
+def needs_translation(query: str) -> bool:
+    return bool(_NON_LATIN_RE.search(query))
+
+
+def english_terms(cfg, llm, query: str) -> str:
+    """One cheap call turning a question into English keywords.
+
+    Returns an empty string when the model finds no searchable subject, or when
+    the call fails — retrieval must degrade, never break, over a helper.
+    """
+    from . import prompts
+    from .schemas import SearchTerms
+
+    try:
+        result = llm.parse(
+            [prompts.load("search_terms", question=query)],
+            [{"role": "user", "content": "List the search terms."}],
+            SearchTerms,
+            max_tokens=1000,
+            effort="low",
+        )
+    except Exception as exc:  # noqa: BLE001 - a failed helper must not lose the turn
+        log.warning("Could not derive English search terms (%s); searching as typed.", exc)
+        return ""
+    return " ".join(result.terms)
+
+
+def build_context(
+    store: Store,
+    query: str,
+    k: int = 12,
+    *,
+    cfg=None,
+    llm=None,
+) -> tuple[str, list[str]]:
     """Retrieve the k most relevant papers and render them for the prompt.
 
     Returns the rendered context and the PMIDs it covers, so callers can tell
     the model exactly which citations are legitimate.
 
-    When lexical retrieval finds nothing but the knowledge base is not empty,
-    the most recent papers are sent instead. BM25 matches characters, so a
-    question asked in Chinese about an English corpus scores zero on every
-    paper — the researcher would import two PDFs, ask about them, and be told
-    the knowledge base is empty. The header says which of the two happened, so
-    the model knows whether relevance has been established or merely recency.
+    BM25 matches characters, so a question asked in Chinese scores zero on every
+    paper in an English corpus. Two layers handle that. Given `cfg` and `llm`, a
+    non-Latin question first buys English keywords for about a cent — the real
+    fix, since it restores actual relevance ranking. Without them, or if that
+    call fails, an empty result falls back to the most recent papers, which is
+    right for a corpus of five and honest noise for a corpus of five hundred.
+    The header says which of the three happened, so the model knows whether
+    relevance was established, guessed at, or merely recency.
     """
-    hits = store.search(query, limit=k)
+    search_query = query
+    if llm is not None and cfg is not None and needs_translation(query):
+        # Appended, not substituted: gene symbols and journal names the
+        # researcher typed are usually better search terms than any paraphrase.
+        if terms := english_terms(cfg, llm, query):
+            search_query = f"{query} {terms}"
+
+    hits = store.search(search_query, limit=k)
 
     if hits:
         articles = [article for article, _score in hits]

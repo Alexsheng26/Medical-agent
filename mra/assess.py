@@ -121,7 +121,7 @@ def assess(
     profile = journal_mod.profile_text(store, journal)
     blocks = _data_blocks(data_paths, notes)
     context, _ = retrieval.build_context(
-        store, retrieval_query(store, blocks, notes), k=RETRIEVAL_K
+        store, retrieval_query(store, blocks, notes), k=RETRIEVAL_K, cfg=cfg, llm=llm
     )
 
     system = [
@@ -164,7 +164,7 @@ def recommend(
     """
     blocks = _data_blocks(data_paths, notes)
     context, _ = retrieval.build_context(
-        store, retrieval_query(store, blocks, notes), k=RETRIEVAL_K
+        store, retrieval_query(store, blocks, notes), k=RETRIEVAL_K, cfg=cfg, llm=llm
     )
 
     system = [

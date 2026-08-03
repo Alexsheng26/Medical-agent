@@ -269,3 +269,77 @@ class TestDigestTrimming:
         trimmed = _trim_for_digest("y" * (DIGEST_TEXT_LIMIT * 4))
         body = trimmed.split("[...")[0] + trimmed.split("...]")[-1]
         assert len(body) <= DIGEST_TEXT_LIMIT + 10
+
+
+class TestCrossLanguageRetrieval:
+    """The corpus is English and BM25 matches characters, so a Chinese question
+    scores zero on every paper in it. This is the first thing the researcher
+    this tool is for actually does."""
+
+    class TermsLLM:
+        def __init__(self, terms, fail=False):
+            self.terms = terms
+            self.fail = fail
+            self.calls = 0
+
+        def parse(self, system, messages, schema, **kwargs):
+            self.calls += 1
+            if self.fail:
+                raise RuntimeError("model unavailable")
+            return schema(terms=self.terms)
+
+        def text(self, *a, **k):  # pragma: no cover
+            raise AssertionError("term extraction must use parse()")
+
+    def test_chinese_is_detected_as_needing_translation(self):
+        assert retrieval.needs_translation("这两篇讲了什么")
+        assert retrieval.needs_translation("TREM2 巨噬细胞怎么回事")
+
+    def test_english_is_left_alone(self):
+        assert not retrieval.needs_translation("macrophage TGF-beta1 fibrosis")
+
+    def test_chinese_question_retrieves_by_relevance(self, store, tmp_path):
+        from mra.config import Config
+
+        llm = self.TermsLLM(["macrophage", "portal fibrosis", "TGF-beta1"])
+        context, pmids = retrieval.build_context(
+            store, "巨噬细胞和纤维化是什么关系", cfg=Config(workspace=tmp_path), llm=llm
+        )
+
+        assert llm.calls == 1
+        assert "31234567" in pmids
+        assert "matched nothing" not in context, "this is a real match, not a fallback"
+
+    def test_english_question_does_not_buy_translation(self, store, tmp_path):
+        from mra.config import Config
+
+        llm = self.TermsLLM(["unused"])
+        retrieval.build_context(
+            store, "macrophage fibrosis TGF", cfg=Config(workspace=tmp_path), llm=llm
+        )
+        assert llm.calls == 0, "no call when the query is already searchable"
+
+    def test_a_failed_translation_degrades_to_the_fallback(self, store, tmp_path):
+        """A helper that cannot run must not cost the researcher their turn."""
+        from mra.config import Config
+
+        llm = self.TermsLLM([], fail=True)
+        context, pmids = retrieval.build_context(
+            store, "巨噬细胞和纤维化", cfg=Config(workspace=tmp_path), llm=llm
+        )
+        assert len(pmids) == 2, "the recent-papers fallback still ran"
+        assert "matched nothing" in context
+
+    def test_no_llm_still_works(self, store):
+        _, pmids = retrieval.build_context(store, "巨噬细胞")
+        assert len(pmids) == 2, "callers without an LLM keep the old behaviour"
+
+    def test_original_query_is_kept_alongside_the_terms(self, store, tmp_path):
+        """Gene symbols the researcher typed beat any paraphrase of them."""
+        from mra.config import Config
+
+        llm = self.TermsLLM(["irrelevant term"])
+        _, pmids = retrieval.build_context(
+            store, "Kupffer 细胞怎么样", cfg=Config(workspace=tmp_path), llm=llm
+        )
+        assert "28001122" in pmids, "'Kupffer' from the raw query must still match"
