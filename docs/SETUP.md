@@ -49,6 +49,27 @@ python --version
 
 看到 `Python 3.10` 或更高就对了。
 
+> **如果这条命令什么都不输出**——不报错、也不打印版本，光标直接跳到下一行——
+> 那不是 Python 装好了，是 Windows 自带的那个「假 python」。Win10 预置了一个指向
+> Microsoft Store 的应用执行别名，Python 没装时敲 `python` 会**静默**跳商店，
+> 于是**每一条 python 命令都零输出、零报错**，看起来像在跑，其实什么都没发生。
+> 这是 Windows 上最容易被误判为"装好了"的情况。
+>
+> 用这两条确认：
+>
+> ```powershell
+> where python
+> py --version
+> ```
+>
+> `where python` 指向 `...\AppData\Local\Microsoft\WindowsApps\python.exe`
+> 就是那个假的；真装好的会指向 `...\Programs\Python\Python3xx\python.exe`。
+> `py` 是官方启动器，只有真装了才存在。
+>
+> 解决：按上面的步骤装 Python 并**勾上 Add python.exe to PATH**；或者去
+> 「设置 → 应用 → 应用和功能 → 应用执行别名」，把 `python.exe` / `python3.exe`
+> 两个开关关掉，让系统不再拦截。
+
 ### 2. 装工具
 
 ```powershell
@@ -187,6 +208,26 @@ mra status --workspace ~/研究/肝纤维化/.mra      # ✗ 会报 unrecognized
 
 **`mra` 不是内部或外部命令 / command not found**
 用 `python -m mra` 代替 `mra`，功能完全一样。根因是 pip 的脚本目录不在 PATH 上。
+
+**`python mra/cli.py` 跑了没反应，或报 attempted relative import**
+`cli.py` 不能单独跑。它是包的一部分，用的是相对导入（`from . import ...`），
+单独执行时 Python 找不到父包。正确的两种方式，都在**项目根目录**（有 `pyproject.toml`
+那一层，不是 `mra\` 里面）执行：
+
+```powershell
+pip install -e .
+mra guide
+
+# 或者不装，把整个包当模块跑
+python -m mra guide
+```
+
+如果这条命令**连报错都没有**，回头看上面 Python 安装那一节的提示框——
+多半是那个假 python。
+
+**`tests\` 里的文件不能直接跑**
+`test_xxx.py` 是 pytest 用的，不是脚本。`pip install pytest` 之后，
+在项目根目录敲 `pytest` 一次跑全部。
 
 **`No API credentials found`**
 key 没设成功，或者设完没重开终端。Windows 上 `setx` 对当前窗口不生效，必须新开一个。
