@@ -13,6 +13,30 @@
 
 ## 安装
 
+### Windows：双击 `启动.bat`
+
+点绿色的 **Code → Download ZIP** 下载解压，然后**双击文件夹里的 `启动.bat`**。
+
+它会自己检查 Python、装好依赖、问你要 API key，然后给一个中文菜单：
+
+```
+ 1  导入文献      PDF / PubMed XML / 纯文本
+ 2  提炼文献      逐篇结构化提炼
+ 3  科学对话      基于你的文献库追问
+ 4  评估数据      打分 + 推荐候选期刊
+ 5  查看状态      文献数、假说、花费
+ 6  引用核对      检查文稿引用是否真实（不花钱）
+ 7  试用示例      导入自带的 8 篇示例文献
+```
+
+PATH、pip、当前目录在哪，这些都不用管。**没装 Python 也没关系**——它会认出来并告诉你
+去哪下、要勾哪个框。（Windows 自带一个指向应用商店的"假 python"，没装时敲命令会
+静默什么都不做，看起来像成功了，这是最容易卡住人的地方，启动器专门处理了它。）
+
+第一次运行大约 3 分钟，之后都是秒开。
+
+### macOS / Linux，或者想自己控制的人
+
 ```bash
 git clone https://github.com/Alexsheng26/Medical-agent.git
 cd Medical-agent
@@ -20,17 +44,16 @@ pip install -e .
 
 export ANTHROPIC_API_KEY="sk-ant-..."      # 必需（写入 ~/.bashrc 更方便）
 mra init --email your@email.edu            # NCBI 要求提供联系邮箱
+mra guide                                  # 中文流程速查
 ```
 
 需要 Python ≥ 3.10。第三方依赖只有两个：`anthropic` 和 `pypdf`。
 
-> **Windows 用户：直接双击仓库里的 `启动.bat`。** 它会检查 Python（包括识别出
-> Windows 那个静默失败的「假 python」）、装好依赖、存好 API key，然后给一个中文菜单。
-> PATH、pip、当前目录这些都不用管。
->
-> **第一次装、或者不熟命令行？** 看 **[docs/SETUP.md](docs/SETUP.md)** —— Windows /
-> macOS / Linux 分平台的完整步骤，含 API key 怎么申请、工作目录怎么组织、
-> 以及一份常见报错对照表。
+> 装不上、或者报了看不懂的错？**[docs/SETUP.md](docs/SETUP.md)** 有分平台的完整步骤
+> 和一份常见报错对照表（PATH、`setx` 不生效、PubMed 被校园网挡、编码报错等）。
+
+> **下面所有 `mra xxx` 命令，用启动器的人不用敲** —— 菜单项就是它们的封装。
+> 读的时候把命令当成"这一步在做什么"来看即可。
 
 ---
 
