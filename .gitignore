@@ -17,3 +17,7 @@ venv/
 *.egg-info/
 .pytest_cache/
 .env
+
+# Launcher-created: a private interpreter and the researcher own data.
+.venv/
+workspace/
