@@ -343,3 +343,49 @@ class TestCrossLanguageRetrieval:
             store, "Kupffer 细胞怎么样", cfg=Config(workspace=tmp_path), llm=llm
         )
         assert "28001122" in pmids, "'Kupffer' from the raw query must still match"
+
+
+class TestGroupSizes:
+    """Only a sample of rows is shown, so asking the model for a group size is
+    asking it to count what it cannot see. On the demo file truncated to 40 of
+    45 rows deepseek-chat reported 11/11/11/11 where the truth was 11/11/11/12,
+    and a wrong n goes straight into a caption."""
+
+    def _csv(self, tmp_path, rows):
+        path = tmp_path / "d.csv"
+        path.write_text("sample_id,stage,value\n" + "\n".join(rows) + "\n", encoding="utf-8")
+        return path
+
+    def test_counts_cover_rows_beyond_the_preview(self, tmp_path):
+        rows = [f"S{i},F{2 if i < 30 else 4},{i}" for i in range(60)]
+        described = assess.load_data_description(self._csv(tmp_path, rows))
+
+        assert "stage: F2=30, F4=30" in described
+        assert "ROWS: 60" in described
+
+    def test_the_truncation_is_stated(self, tmp_path):
+        rows = [f"S{i},F2,{i}" for i in range(60)]
+        described = assess.load_data_description(self._csv(tmp_path, rows))
+        assert "Only the first 40 of 60 rows are shown" in described
+        assert "Do not count rows" in described
+
+    def test_a_short_file_says_nothing_about_truncation(self, tmp_path):
+        described = assess.load_data_description(self._csv(tmp_path, ["S1,F2,1", "S2,F3,2"]))
+        assert "Only the first" not in described
+
+    def test_identifiers_are_not_reported_as_groups(self, tmp_path):
+        """One row per value is a key, not a grouping variable."""
+        described = assess.load_data_description(self._csv(tmp_path, ["S1,F2,1", "S2,F3,2"]))
+        assert "sample_id:" not in described
+
+    def test_measurements_are_not_reported_as_groups(self, tmp_path):
+        rows = [f"S{i},F2,{i * 1.5}" for i in range(50)]
+        described = assess.load_data_description(self._csv(tmp_path, rows))
+        assert "value:" not in described
+
+    def test_the_real_demo_file_counts_correctly(self):
+        from importlib import resources
+        with resources.as_file(resources.files("mra") / "examples" / "demo_data.csv") as path:
+            described = assess.load_data_description(path)
+        assert "stage: F0=11, F2=11, F3=11, F4=12" in described
+        assert "group: MASH=34, control=11" in described

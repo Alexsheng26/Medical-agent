@@ -61,14 +61,51 @@ def load_data_description(path: Path) -> str:
             return f"({path.name} is empty)"
         header, body = rows[0], rows[1:]
         preview = "\n".join(delimiter.join(r) for r in body[:MAX_TABLE_ROWS])
+        shown = min(MAX_TABLE_ROWS, len(body))
+        truncated = (
+            f"\n(Only the first {shown} of {len(body)} rows are shown. Do not count "
+            "rows to get a group size — use GROUP SIZES above, which covers all rows.)"
+            if shown < len(body) else ""
+        )
         return (
             f"FILE: {path.name}\n"
             f"COLUMNS ({len(header)}): {delimiter.join(header)}\n"
             f"ROWS: {len(body)}\n"
-            f"FIRST {min(MAX_TABLE_ROWS, len(body))} ROWS:\n{preview}"
+            f"{_group_sizes(header, body)}"
+            f"FIRST {shown} ROWS:\n{preview}{truncated}"
         )
 
     return f"FILE: {path.name}\n\n{raw}"
+
+
+# A column with at most this many distinct values is a grouping variable, not a
+# measurement, and its counts are the n a figure or a caption needs.
+MAX_GROUP_LEVELS = 12
+
+
+def _group_sizes(header: list[str], body: list[list[str]]) -> str:
+    """Count every level of each categorical column, across all rows.
+
+    Only a sample of rows is shown to the model, so asking it for a group size
+    means asking it to count what it cannot see. On a 45-row file truncated to
+    40 it reported 11/11/11/11 where the truth was 11/11/11/12, and a wrong n
+    goes straight into a figure caption — which is the one place a reviewer
+    always checks.
+    """
+    from collections import Counter
+
+    lines = []
+    for index, name in enumerate(header):
+        values = [row[index] for row in body if index < len(row) and row[index] != ""]
+        counts = Counter(values)
+        if not values or len(counts) > MAX_GROUP_LEVELS or len(counts) == len(values):
+            continue  # a measurement or an identifier, not a group
+        rendered = ", ".join(f"{level}={n}" for level, n in sorted(counts.items()))
+        lines.append(f"  {name}: {rendered}")
+
+    if not lines:
+        return ""
+    return "GROUP SIZES (counted over every row):\n" + "\n".join(lines) + "\n"
 
 
 def retrieval_query(store: Store, blocks: list[str], notes: str = "") -> str:
