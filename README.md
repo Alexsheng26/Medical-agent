@@ -75,8 +75,10 @@ mra digest                                    # 逐篇结构化提炼
 mra import ~/Downloads/pubmed_result.xml --topic "NASH 纤维化"
 # 自己下载的文章也能进库——PDF 直接喂：
 mra import ~/papers/*.pdf --topic "NASH 纤维化"
-# 想先试试手感，仓库里有现成的 8 篇示例语料：
+# 想先试试手感，仓库里有现成的 8 篇示例语料 + 一份配套的虚构数据：
 mra import examples/demo_corpus.xml
+mra assess examples/demo_data.csv examples/demo_notes.md   # 打分 + 推荐期刊
+mra figures examples/demo_data.csv examples/demo_notes.md  # 图表怎么排
 
 # 2. 磨假说：多轮对话，每轮都基于本地文献库检索
 mra chat

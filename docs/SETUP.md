@@ -187,6 +187,17 @@ mra digest          # 逐篇结构化提炼（8 篇 = 8 次调用）
 mra chat            # 进入对话，试着说「这批文献里最大的矛盾是什么」
 ```
 
+仓库里还带了一份**配套的虚构数据**（和示例文献同一个主题，所以检索和新颖性判断
+都能真正跑起来），用来试后半条链路：
+
+```bash
+mra assess  examples/demo_data.csv examples/demo_notes.md   # 打分 + 推荐候选期刊
+mra figures examples/demo_data.csv examples/demo_notes.md   # 每张图在论证什么
+```
+
+`demo_notes.md` 里的汇总值和 `demo_data.csv` 逐样本算出来的**故意对不上**，
+可以看工具会不会发现。
+
 想清空重来：直接删掉工作目录里的 `.mra` 文件夹即可，不会影响别的东西。
 
 ---
