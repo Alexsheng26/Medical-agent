@@ -168,6 +168,32 @@ def _store(cfg: Config) -> Store:
     return Store(cfg.db_path)
 
 
+CONFIRM_ABOVE = 1.00
+
+
+def _confirm_spend(estimate: float | None, args) -> bool:
+    """Ask before a large spend. Returns False when the researcher declines.
+
+    A job this size run from a script with no ceiling is the case worth
+    refusing rather than guessing at: without a terminal there is nobody to
+    answer, and proceeding silently is how a batch job becomes a surprise bill.
+    """
+    if getattr(args, "yes", False) or args.max_cost is not None:
+        return True
+    if estimate is None or estimate < CONFIRM_ABOVE:
+        return True
+
+    if not sys.stdin.isatty():
+        print(
+            f"\nThis is estimated at ${estimate:.2f} and nothing is watching for an "
+            "answer. Re-run with --max-cost to set a ceiling, or --yes to accept.",
+            file=sys.stderr,
+        )
+        return False
+
+    return input("Continue? [y/N] ").strip().lower() in {"y", "yes"}
+
+
 def _write_out(text: str, path: str | None, cfg: Config, default_name: str) -> Path:
     target = Path(path) if path else cfg.drafts_dir / default_name
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -366,20 +392,53 @@ def _slug(text: str) -> str:
 
 
 def cmd_digest(args, cfg: Config) -> int:
+    """Extract cards, with the price shown before the money is spent.
+
+    This is the most expensive command in the tool — one call per paper — and
+    the launcher put it one keystroke away. Importing a large PubMed export and
+    running it is a plausible accident worth tens of dollars, so the estimate is
+    always printed and a large job asks first.
+    """
     with _store(cfg) as store:
         llm = _llm(cfg)
-        pending = len(store.pmids_without_cards())
+        pending = store.pmids_without_cards()
         if not pending:
             print("Every stored article already has a card.")
             return 0
 
-        print(f"Extracting {min(pending, args.limit or pending)} of {pending} pending articles…")
+        planned = pending[: args.limit] if args.limit else pending
+        estimate, chars = pipeline.estimate_digest(store, cfg.model, planned)
+
+        print(f"Extracting {len(planned)} of {len(pending)} pending articles "
+              f"({chars // 1000}k characters).")
+        if estimate is None:
+            print(f"  Cost unknown — no price on file for {cfg.model}.")
+        else:
+            print(f"  Estimated cost: about ${estimate:.2f}"
+                  + (f", hard stop at ${args.max_cost:.2f}" if args.max_cost else ""))
+
+        if not _confirm_spend(estimate, args):
+            return 2
+
+        ledger = _ledger(cfg)
+
+        def over_budget() -> bool:
+            if args.max_cost is None:
+                return False
+            spent = ledger.session.cost(cfg.model)
+            return spent is not None and spent >= args.max_cost
 
         def progress(index: int, total: int, pmid: str) -> None:
             print(f"  [{index}/{total}] PMID:{pmid}", end="\r", flush=True)
 
-        ok, failed = pipeline.digest(cfg, store, llm, limit=args.limit, on_progress=progress)
+        ok, failed = pipeline.digest(
+            cfg, store, llm, limit=args.limit, on_progress=progress, stop_check=over_budget
+        )
         print(f"\nExtracted {ok} cards" + (f", {failed} failed" if failed else "."))
+        if over_budget():
+            print(f"Stopped at the ${args.max_cost:.2f} ceiling. "
+                  f"{len(pending) - ok - failed} papers still pending — re-run to continue.")
+            return 2
     return 0
 
 
@@ -797,6 +856,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = add("digest", cmd_digest, "Extract structured cards for stored articles")
     p.add_argument("--limit", type=int, help="Only process this many")
+    p.add_argument("--max-cost", type=float,
+                   help="Stop cleanly once this much has been spent (exit code 2)")
+    p.add_argument("-y", "--yes", action="store_true", help="Skip the confirmation")
 
     p = add("chat", cmd_chat, "Scientific dialogue grounded in the knowledge base")
     p.add_argument("message", nargs="?", help="One-shot message (omit for interactive)")

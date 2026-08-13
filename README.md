@@ -319,6 +319,27 @@ mra refs proposal.md            # 发现伪造引用时返回退出码 1，可�
 
 ---
 
+## 花钱这件事
+
+按调用量计费，不是订阅。每条命令跑完都打印这次花了多少、累计多少，`mra usage` 查明细。
+
+`digest` 是最贵的一条——**每篇文献一次调用**。所以它跑之前先按你库里实际存的文本量
+估算并打印出来，超过 $1 会先问一句。**没有终端能回答的时候（脚本、定时任务）直接拒绝**，
+让你显式加 `--max-cost` 或 `--yes`——静默跑下去正是账单变成意外的方式：
+
+```
+Extracting 500 of 500 pending articles (12000k characters).
+  Estimated cost: about $43.50
+
+This is estimated at $43.50 and nothing is watching for an answer.
+Re-run with --max-cost to set a ceiling, or --yes to accept.
+```
+
+`--max-cost` 是硬闸，`digest` 和 `sync` 都有：到上限就干净停下（退出码 2），
+已提炼的保留，再跑一次接着做。
+
+---
+
 ## 命令速查
 
 | 命令 | 作用 | 需要 API |
@@ -330,7 +351,7 @@ mra refs proposal.md            # 发现伪造引用时返回退出码 1，可�
 | `mra import FILE...` | 导入 PubMed XML / PDF / 纯文本 | XML 不需要 |
 | `mra watch add/list/remove` | 保存检索式（供 sync 重放） | add 需要 |
 | `mra sync` | 跑完所有 watch，提炼新文献，写简报 | ✓ |
-| `mra digest` | 逐篇结构化提炼 | ✓ |
+| `mra digest` | 逐篇结构化提炼（先报预估，贵就先问） | ✓ |
 | `mra chat [MSG]` | 科学对话（省略 MSG 进入交互） | ✓ |
 | `mra hypothesis` | 冻结为带版本的假说 | ✓ |
 | `mra hypotheses` / `mra diff A B` | 版本列表 / 逐字段比较 | |

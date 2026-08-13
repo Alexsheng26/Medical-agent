@@ -254,3 +254,75 @@ class TestConfig:
         cfg = Config(workspace=tmp_path / "ws")
         assert cfg.db_path == tmp_path / "ws" / "knowledge.db"
         assert cfg.drafts_dir == tmp_path / "ws" / "drafts"
+
+
+class TestDigestSpendGuard:
+    """digest is the most expensive command here — one call per paper — and the
+    launcher put it one keystroke away."""
+
+    def _library(self, workspace, count, chars):
+        from mra.config import Config
+        cfg = Config(workspace=workspace)
+        with Store(cfg.db_path) as store:
+            store.add_articles([
+                Article(pmid=f"3000000{i}", title=f"Paper {i}", abstract="x" * chars)
+                for i in range(count)
+            ])
+        return cfg
+
+    def test_estimate_scales_with_the_stored_text(self, workspace):
+        from mra import pipeline
+        cfg = self._library(workspace, 4, 2000)
+        with Store(cfg.db_path) as store:
+            small, small_chars = pipeline.estimate_digest(
+                store, cfg.model, store.pmids_without_cards()
+            )
+
+        cfg2 = self._library(workspace.parent / "big", 4, 40_000)
+        with Store(cfg2.db_path) as store:
+            big, big_chars = pipeline.estimate_digest(
+                store, cfg2.model, store.pmids_without_cards()
+            )
+
+        assert big_chars > small_chars
+        assert big > small, "a full-text library must not be priced like abstracts"
+
+    def test_unknown_model_reports_unknown_not_zero(self, workspace):
+        from mra import pipeline
+        cfg = self._library(workspace, 2, 1000)
+        cfg.model = "some-model-with-no-price"
+        with Store(cfg.db_path) as store:
+            cost, _ = pipeline.estimate_digest(store, cfg.model, store.pmids_without_cards())
+        assert cost is None
+
+    def test_a_large_job_is_refused_when_nobody_can_answer(self, workspace, capsys, monkeypatch):
+        """Blocking on input() in a script would hang; proceeding silently is how
+        a batch job becomes a surprise bill."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        self._library(workspace, 400, 20_000)
+        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+        assert run(["digest"], workspace) == 2
+        assert "--max-cost" in capsys.readouterr().err
+
+    def test_a_ceiling_removes_the_need_to_confirm(self, workspace, monkeypatch):
+        cfg = self._library(workspace, 400, 20_000)
+        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+        args = type("A", (), {"yes": False, "max_cost": 5.0})()
+        assert cli._confirm_spend(99.0, args) is True
+
+    def test_a_small_job_is_not_interrupted(self, workspace, monkeypatch):
+        args = type("A", (), {"yes": False, "max_cost": None})()
+        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+        assert cli._confirm_spend(0.30, args) is True
+
+    def test_the_estimate_is_printed_before_spending(self, workspace, capsys, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        self._library(workspace, 3, 1000)
+        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+        run(["digest"], workspace)
+        out = capsys.readouterr().out
+        assert "Estimated cost" in out
+        assert "3 of 3 pending" in out

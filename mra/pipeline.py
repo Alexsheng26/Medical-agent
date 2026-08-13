@@ -28,6 +28,11 @@ DIGEST_TEXT_LIMIT = 24000
 # more per character than the middle of the Methods.
 DIGEST_HEAD_SHARE = 0.55
 
+# For the pre-flight estimate. Observed on real runs: the extraction prompt adds
+# roughly this much around each paper, and a LitCard comes back near this size.
+DIGEST_PROMPT_TOKENS = 900
+DIGEST_OUTPUT_TOKENS = 2100
+
 
 def _trim_for_digest(text: str) -> str:
     """Keep the opening and the closing of a long paper, drop the middle."""
@@ -212,6 +217,33 @@ def _local_article(cfg: Config, doc: ingest.ExtractedDoc, llm: LLM | None):
 
 
 # ----------------------------------------------------------------- extraction
+
+
+def estimate_digest(store: Store, model: str, pmids: list[str]) -> tuple[float | None, int]:
+    """Roughly what extracting these papers will cost, and their total characters.
+
+    Estimated from the text actually stored rather than from a flat per-paper
+    figure, because a 60k-character full text and a 1.5k-character abstract are
+    an order of magnitude apart and the researcher's library is usually a mix.
+    Returns None for the cost when the model is not in the price table — an
+    unknown price should read as unknown, not as zero.
+    """
+    from .usage import Usage
+
+    chars = 0
+    for pmid in pmids:
+        article = store.get_article(pmid)
+        if article:
+            chars += min(len(article.abstract or ""), DIGEST_TEXT_LIMIT)
+
+    # ~4 characters per token, plus the prompt around each paper. Output is a
+    # LitCard, which lands near 2k tokens per paper in practice.
+    usage = Usage(
+        calls=len(pmids),
+        input_tokens=chars // 4 + DIGEST_PROMPT_TOKENS * len(pmids),
+        output_tokens=DIGEST_OUTPUT_TOKENS * len(pmids),
+    )
+    return usage.cost(model), chars
 
 
 def digest(
