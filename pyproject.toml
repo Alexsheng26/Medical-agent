@@ -10,6 +10,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+# For pointing the tool at an OpenAI-compatible endpoint (DeepSeek and friends).
+openai = ["openai>=1.40"]
 
 [project.scripts]
 mra = "mra.cli:main"

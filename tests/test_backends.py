@@ -220,3 +220,38 @@ class TestErrorMessages:
     def test_the_handler_covers_the_installed_sdks(self):
         import anthropic
         assert anthropic.APIError in backends.api_error_types()
+
+
+class TestCredentialCheck:
+    """The provider decides which variable holds the key. Getting this wrong
+    made every command except `doctor` refuse to start on a non-default
+    provider — and doctor passed, which is the worst combination."""
+
+    def test_openai_provider_accepts_the_openai_key(self, monkeypatch, tmp_path):
+        from mra import cli
+
+        for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("MRA_API_KEY", "sk-test")
+        monkeypatch.setattr(cli, "LLM", lambda cfg, ledger=None: "built")
+
+        cfg = Config(workspace=tmp_path, provider="openai", model="deepseek-chat")
+        assert cli._llm(cfg) == "built"
+
+    def test_a_missing_key_names_the_right_variable(self, monkeypatch, tmp_path):
+        from mra import cli
+
+        for name in ("MRA_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
+            monkeypatch.delenv(name, raising=False)
+        cfg = Config(workspace=tmp_path, provider="openai")
+
+        with pytest.raises(ValueError, match="MRA_API_KEY"):
+            cli._llm(cfg)
+
+    def test_anthropic_is_unaffected(self, monkeypatch, tmp_path):
+        from mra import cli
+
+        monkeypatch.delenv("MRA_API_KEY", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        monkeypatch.setattr(cli, "LLM", lambda cfg, ledger=None: "built")
+        assert cli._llm(Config(workspace=tmp_path)) == "built"

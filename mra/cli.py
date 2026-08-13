@@ -122,8 +122,13 @@ def _run(args, cfg: Config) -> int:
             file=sys.stderr,
         )
         return 2
-    except (ValueError, FileNotFoundError) as exc:
+    except (ValueError, FileNotFoundError, backends.BackendUnavailable) as exc:
         print(f"\nError: {exc}", file=sys.stderr)
+        return 1
+    except backends.BackendError as exc:
+        # The provider answered, but not with something usable. The message
+        # already names which commands need what, so print it as-is.
+        print(f"\n{exc}", file=sys.stderr)
         return 1
     except backends.api_error_types() as exc:
         # A billing or auth failure used to surface as a forty-line traceback
@@ -161,13 +166,21 @@ def _ledger(cfg: Config) -> Ledger:
 
 
 def _llm(cfg: Config) -> LLM:
-    import os
+    """Build the model client, checking the credential the *configured provider*
+    actually reads.
 
-    if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+    Hard-coding the Anthropic variables here meant that pointing the tool at an
+    OpenAI-compatible endpoint left every command except `doctor` refusing to
+    start — and `doctor` passed, because it builds the client directly. A green
+    self-check followed by nothing working is worse than either alone.
+    """
+    provider = (cfg.provider or "anthropic").lower()
+    variable, present = doctor_mod.key_variable(provider)
+    if not present:
         raise ValueError(
-            "No API credentials found. Set ANTHROPIC_API_KEY in your environment "
-            "(or run `ant auth login`). Commands that need no model — lint, refs, "
-            "memory, status — work without it."
+            f"No API credentials found for provider {provider!r}. "
+            f"Set {variable} in your environment. Commands that need no model — "
+            "lint, refs, memory, status — work without it."
         )
     return LLM(cfg, ledger=_ledger(cfg))
 

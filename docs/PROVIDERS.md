@@ -12,6 +12,18 @@ export MRA_MODEL=deepseek-chat
 pip install openai        # 只有走这条路才需要
 ```
 
+**注意 `set` 是 cmd 的语法。** PowerShell 里要写成：
+
+```powershell
+$env:MRA_PROVIDER   = "openai"
+$env:MRA_BASE_URL   = "https://api.deepseek.com"
+$env:MRA_API_KEY    = "sk-你的key"
+$env:MRA_MODEL      = "deepseek-chat"
+```
+
+两种写法都**只对当前这个窗口有效**，关掉就没了——临时试正好。想长期生效，
+cmd 用 `setx`（记得新开窗口），或写进下面的配置文件。
+
 也可以写进工作区的 `mra.config.json`（key 除外，key 只从环境变量读）：
 
 ```json
