@@ -76,9 +76,10 @@ mra import ~/Downloads/pubmed_result.xml --topic "NASH 纤维化"
 # 自己下载的文章也能进库——PDF 直接喂：
 mra import ~/papers/*.pdf --topic "NASH 纤维化"
 # 想先试试手感，仓库里有现成的 8 篇示例语料 + 一份配套的虚构数据：
-mra import examples/demo_corpus.xml
-mra assess examples/demo_data.csv examples/demo_notes.md   # 打分 + 推荐期刊
-mra figures examples/demo_data.csv examples/demo_notes.md  # 图表怎么排
+mra demo                                      # 把示例文件复制到当前目录
+mra import demo_corpus.xml
+mra assess demo_data.csv demo_notes.md        # 打分 + 推荐期刊
+mra figures demo_data.csv demo_notes.md       # 图表怎么排
 
 # 2. 磨假说：多轮对话，每轮都基于本地文献库检索
 mra chat
@@ -380,6 +381,7 @@ Re-run with --max-cost to set a ceiling, or --yes to accept.
 |---|---|:---:|
 | `mra init` | 建立工作区 | |
 | `mra guide` | 中文流程速查 | |
+| `mra demo` | 复制示例文献+数据到当前目录 | |
 | `mra doctor` | 连接自检：key / 连通性 / tool calling | ✓（两次极小调用） |
 | `mra status` | 当前工作区概况 | |
 | `mra search TOPIC` | 规划检索式并抓取 PubMed | ✓ |

@@ -179,7 +179,8 @@ mra init --email 你的邮箱@学校.edu.cn
 不联网不花钱就能试：
 
 ```bash
-mra import examples/demo_corpus.xml
+mra demo            # 把示例文件复制到当前目录
+mra import demo_corpus.xml
 mra status
 ```
 
@@ -194,8 +195,8 @@ mra chat            # 进入对话，试着说「这批文献里最大的矛盾�
 都能真正跑起来），用来试后半条链路：
 
 ```bash
-mra assess  examples/demo_data.csv examples/demo_notes.md   # 打分 + 推荐候选期刊
-mra figures examples/demo_data.csv examples/demo_notes.md   # 每张图在论证什么
+mra assess  demo_data.csv demo_notes.md   # 打分 + 推荐候选期刊
+mra figures demo_data.csv demo_notes.md   # 每张图在论证什么
 ```
 
 `demo_notes.md` 里的汇总值和 `demo_data.csv` 逐样本算出来的**故意对不上**，

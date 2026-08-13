@@ -24,7 +24,9 @@ build-backend = "setuptools.build_meta"
 include = ["mra*"]
 
 [tool.setuptools.package-data]
-mra = ["prompts/*.md"]
+# examples ship with the package: without them `mra demo` and every "try it
+# first" instruction only work for someone who cloned the repository.
+mra = ["prompts/*.md", "examples/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

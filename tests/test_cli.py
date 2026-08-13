@@ -358,3 +358,41 @@ class TestLogging:
         cli._configure_logging(True)
         assert logging.getLogger("mra").getEffectiveLevel() == logging.DEBUG
         assert not logging.getLogger("httpx").isEnabledFor(logging.INFO)
+
+
+class TestDemoFiles:
+    """The samples ship inside the package. Telling someone who pip-installed to
+    run `mra import examples/...` sends them looking for a directory they do not
+    have — which is exactly what happened."""
+
+    def test_examples_are_packaged_not_just_in_the_repo(self):
+        from importlib import resources
+        for name in cli.EXAMPLE_FILES:
+            assert (resources.files("mra") / "examples" / name).is_file()
+
+    def test_demo_copies_them_here(self, workspace, tmp_path, capsys, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        assert run(["demo"], workspace) == 0
+        for name in cli.EXAMPLE_FILES:
+            assert (tmp_path / name).is_file()
+
+    def test_demo_names_what_to_run_next(self, workspace, tmp_path, capsys, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        run(["demo"], workspace)
+        out = capsys.readouterr().out
+        assert "mra import demo_corpus.xml" in out
+        assert "mra figures" in out
+
+    def test_the_copied_corpus_actually_imports(self, workspace, tmp_path, monkeypatch):
+        """The point of shipping them is that the next command works."""
+        monkeypatch.chdir(tmp_path)
+        run(["demo"], workspace)
+        assert run(["import", "demo_corpus.xml"], workspace) == 0
+
+        with Store(workspace / "knowledge.db") as store:
+            assert store.count_articles() == 8
+
+    def test_demo_takes_a_destination(self, workspace, tmp_path):
+        target = tmp_path / "elsewhere"
+        assert run(["demo", "--to", str(target)], workspace) == 0
+        assert (target / "demo_data.csv").is_file()

@@ -207,7 +207,8 @@ if not defined DOC goto :menu
 goto :after
 
 :do_demo
-"%~dp0%VENV%" -m mra import "%~dp0examples\demo_corpus.xml"
+"%~dp0%VENV%" -m mra demo
+"%~dp0%VENV%" -m mra import demo_corpus.xml
 echo.
 echo   导入完成。可以选 3 试着问：这批文献里最大的矛盾是什么
 goto :after
