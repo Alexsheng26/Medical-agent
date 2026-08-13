@@ -237,6 +237,78 @@ class ReviewOutline(BaseModel):
     )
 
 
+class FigurePanel(BaseModel):
+    """One panel. The unit a reviewer actually argues with."""
+
+    label: str = Field(description="Panel letter as it will be printed, e.g. 'A'")
+    claim: str = Field(
+        description="What this panel establishes, as a sentence that could be "
+        "checked against it. Not 'shows expression levels' — what the reader "
+        "is supposed to conclude."
+    )
+    shows: str = Field(
+        description="What is plotted: the x variable, the y variable, the "
+        "grouping, and the unit of analysis (per cell, per section, per patient)"
+    )
+    plot_type: str = Field(
+        description="The chart form and why that form. Name the form a reviewer "
+        "expects for this n and this data shape."
+    )
+    source: str = Field(
+        description="Which supplied file and which columns this comes from, by "
+        "name. Say 'not in the supplied data' when it is not there."
+    )
+    caveats: list[str] = Field(
+        description="What a reviewer will question about this panel specifically"
+    )
+
+
+class FigurePlan(BaseModel):
+    """One figure: an argument made of panels."""
+
+    number: int = Field(description="Figure number in reading order, starting at 1")
+    handle: str = Field(description="Short working name, e.g. 'Septal TREM2 gradient'")
+    argument: str = Field(
+        description="What the whole figure establishes that no single panel does"
+    )
+    panels: list[FigurePanel]
+    caption: str = Field(
+        description="A draft caption claiming exactly what the panels support and "
+        "no more, with n, the test, and what the error bars are"
+    )
+    missing: list[str] = Field(
+        description="Data or controls this figure needs that were not supplied"
+    )
+
+
+class FigureSet(BaseModel):
+    """A figure plan for one body of work (the 'why was my figure rejected' step).
+
+    Deliberately not a rendering: what gets a figure sent back is almost never
+    the colours. It is that the panel does not establish what the caption says,
+    that the plot form hides the n, or that the control panel is absent.
+    """
+
+    figures: list[FigurePlan] = Field(
+        description="3-6 figures in reading order, main text only"
+    )
+    story: str = Field(
+        description="How the figures chain into one argument, figure by figure. "
+        "If they do not chain, say which one is orphaned."
+    )
+    caption_overclaims: list[str] = Field(
+        description="Captions the researcher will want to write that the panels "
+        "will not support — the sentence, then why it fails"
+    )
+    better_as_table: list[str] = Field(
+        description="Things being forced into a figure that belong in a table or "
+        "in the text, and why"
+    )
+    supplementary: list[str] = Field(
+        description="Panels worth keeping but not in the main figures"
+    )
+
+
 class WritingFingerprint(BaseModel):
     """The researcher's own writing habits, learned from their prior text."""
 

@@ -185,3 +185,38 @@ class TestUsageMapping:
             "usage": None, "model": "m",
         })()])
         assert openai_llm(stub).text("sys", [{"role": "user", "content": "go"}]).text == "x"
+
+
+class TestErrorMessages:
+    """A billing failure used to surface as a forty-line traceback ending in a
+    JSON blob. The fix is the researcher's to make; the message has to say so."""
+
+    def _error(self, message, status=None):
+        exc = RuntimeError(message)
+        if status is not None:
+            exc.status_code = status
+        return exc
+
+    def test_out_of_credit_names_the_page_and_says_work_is_kept(self):
+        text = backends.describe_api_error(self._error(
+            "Error code: 400 - your credit balance is too low to access the API"))
+        assert "余额不足" in text
+        assert "Plans & Billing" in text
+        assert "继续" in text, "the user needs to know a re-run resumes"
+
+    def test_a_bad_key_mentions_the_windows_trap(self):
+        text = backends.describe_api_error(self._error("invalid x-api-key", status=401))
+        assert "setx" in text
+
+    def test_rate_limit_says_to_wait(self):
+        assert "限流" in backends.describe_api_error(self._error("rate limit", status=429))
+
+    def test_a_server_fault_is_not_blamed_on_the_user(self):
+        assert "不是你的问题" in backends.describe_api_error(self._error("boom", status=503))
+
+    def test_an_unrecognised_error_still_shows_what_happened(self):
+        assert "something odd" in backends.describe_api_error(self._error("something odd"))
+
+    def test_the_handler_covers_the_installed_sdks(self):
+        import anthropic
+        assert anthropic.APIError in backends.api_error_types()

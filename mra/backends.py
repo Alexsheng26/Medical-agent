@@ -334,6 +334,56 @@ def _openai_usage(response) -> Usage:
     )
 
 
+# --------------------------------------------------------------- error reading
+
+
+def api_error_types() -> tuple[type, ...]:
+    """Whichever provider SDKs are installed, for the CLI's top-level handler."""
+    types: list[type] = []
+    for module_name, attribute in (("anthropic", "APIError"), ("openai", "APIError")):
+        try:
+            module = __import__(module_name)
+        except ImportError:  # pragma: no cover - optional dependency
+            continue
+        error = getattr(module, attribute, None)
+        if isinstance(error, type):
+            types.append(error)
+    return tuple(types) or (RuntimeError,)
+
+
+def describe_api_error(exc: Exception) -> str:
+    """Turn a provider error into something a researcher can act on.
+
+    Found the hard way: a key running out of credit produced a forty-line
+    traceback ending in a JSON blob. That tells someone who has never used a
+    terminal nothing at all, and the fix is theirs to make, not ours.
+    """
+    text = str(exc).lower()
+    status = getattr(exc, "status_code", None)
+
+    if "credit balance" in text or "insufficient" in text or "quota" in text:
+        return (
+            "余额不足，这次调用没有执行。\n"
+            "  到 https://platform.claude.com 的 Plans & Billing 充值后重试。\n"
+            "  已经完成的部分都已保存，重跑会从没做完的地方继续。"
+        )
+    if status == 401 or "authentication" in text or "invalid x-api-key" in text:
+        return (
+            "API key 无效或已被删除。\n"
+            "  确认 ANTHROPIC_API_KEY 设对了（Windows 上 setx 之后要新开一个窗口），\n"
+            "  或到 platform.claude.com 重新建一个。"
+        )
+    if status == 429 or "rate limit" in text:
+        return "触发了服务端限流。等一两分钟再跑，已完成的部分不会丢。"
+    if status is not None and 500 <= status < 600:
+        return "服务端暂时出错，不是你的问题。稍后重试即可。"
+    if "connection" in text or "timeout" in text:
+        return (
+            "连不上模型服务。检查网络或代理；如果在校园网内，可能被防火墙挡了。"
+        )
+    return f"调用模型时出错：{exc}"
+
+
 # ------------------------------------------------------------------- selection
 
 

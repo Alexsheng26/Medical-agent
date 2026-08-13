@@ -13,8 +13,10 @@ import sys
 from pathlib import Path
 
 from . import assess as assess_mod
+from . import backends
 from . import citations, deai, dialogue, journal as journal_mod, memory as memory_mod
 from . import brief as brief_mod
+from . import figures as figures_mod
 from . import ingest, pipeline, review as review_mod, writing
 from .config import Config
 from .llm import LLM, RefusalError
@@ -121,6 +123,11 @@ def _run(args, cfg: Config) -> int:
         return 2
     except (ValueError, FileNotFoundError) as exc:
         print(f"\nError: {exc}", file=sys.stderr)
+        return 1
+    except backends.api_error_types() as exc:
+        # A billing or auth failure used to surface as a forty-line traceback
+        # ending in a JSON blob, which tells a first-time user nothing.
+        print(f"\n{backends.describe_api_error(exc)}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
@@ -572,6 +579,28 @@ def cmd_review(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_figures(args, cfg: Config) -> int:
+    """Plan the figures. Not draw them — see mra/figures.py for why."""
+    with _store(cfg) as store:
+        llm = _llm(cfg)
+        paths = [Path(p) for p in args.data]
+        plan = figures_mod.plan(
+            cfg, store, llm, paths, journal=args.journal or "", notes=args.notes
+        )
+        print(figures_mod.format_figures(plan))
+
+        if unsourced := figures_mod.unsourced_panels(plan, paths):
+            print("\n⚠ 下列 panel 引用的列在你给的文件里找不到——"
+                  "可能是你有但没附上，也可能是模型想当然了，自己核一下：")
+            for item in unsourced:
+                print(f"    {item}")
+
+        if args.output:
+            path = _write_out(figures_mod.to_json(plan), args.output, cfg, "")
+            print(f"\nFull plan written to {path}")
+    return 0
+
+
 def cmd_journal_add(args, cfg: Config) -> int:
     with _store(cfg) as store:
         llm = _llm(cfg)
@@ -913,6 +942,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--notes", default="", help="Context the files do not carry")
     p.add_argument("-o", "--output", help="Also write the full assessment as JSON")
+
+    p = add("figures", cmd_figures, "Plan what your figures argue (not draw them)")
+    p.add_argument("data", nargs="+", help="Data files (csv/tsv/txt/md)")
+    p.add_argument("--journal", help="Follow this journal's figure conventions")
+    p.add_argument("--notes", default="", help="Context the files do not carry")
+    p.add_argument("-o", "--output", help="Also write the full plan as JSON")
 
     p = add("draft", cmd_draft, "Draft a manuscript section in a journal's style")
     p.add_argument("section", choices=writing.SECTIONS)
