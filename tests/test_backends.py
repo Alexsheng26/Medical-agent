@@ -365,3 +365,72 @@ class TestJsonRecovery:
         stub = StubOpenAI([reply(arguments="not json at all")] * 2)
         with pytest.raises(backends.BackendError, match="no parseable JSON"):
             openai_llm(stub).parse("sys", [{"role": "user", "content": "go"}], Card)
+
+
+class TestDoubleEncodedFields:
+    """Tool calling sometimes JSON-stringifies a nested value instead of
+    emitting it. Every item is present; only the encoding is wrong."""
+
+    SCHEMA = {
+        "type": "object",
+        "properties": {
+            "items": {"type": "array", "items": {"type": "string"}},
+            "caption": {"type": "string"},
+            "nested": {
+                "type": "object",
+                "properties": {"inner": {"type": "array", "items": {"type": "string"}}},
+            },
+        },
+    }
+
+    def test_a_stringified_array_is_decoded(self):
+        out = backends.coerce_json_strings({"items": '["a", "b"]'}, self.SCHEMA)
+        assert out["items"] == ["a", "b"]
+
+    def test_a_real_array_is_untouched(self):
+        out = backends.coerce_json_strings({"items": ["a"]}, self.SCHEMA)
+        assert out["items"] == ["a"]
+
+    def test_a_string_field_stays_a_string(self):
+        """A caption that happens to start with a bracket is still a caption."""
+        out = backends.coerce_json_strings({"caption": '["not a list"]'}, self.SCHEMA)
+        assert out["caption"] == '["not a list"]'
+
+    def test_a_decoded_value_of_the_wrong_shape_is_left_alone(self):
+        """Leaving it makes the validation error tell the truth."""
+        out = backends.coerce_json_strings({"items": '{"a": 1}'}, self.SCHEMA)
+        assert out["items"] == '{"a": 1}'
+
+    def test_unparseable_strings_are_left_alone(self):
+        out = backends.coerce_json_strings({"items": "just prose"}, self.SCHEMA)
+        assert out["items"] == "just prose"
+
+    def test_nested_objects_are_walked(self):
+        out = backends.coerce_json_strings({"nested": {"inner": '["x"]'}}, self.SCHEMA)
+        assert out["nested"]["inner"] == ["x"]
+
+    def test_unknown_keys_survive(self):
+        out = backends.coerce_json_strings({"extra": "kept"}, self.SCHEMA)
+        assert out["extra"] == "kept"
+
+    def test_the_real_failure_now_parses(self):
+        """The exact shape deepseek-chat returned: one list double-encoded."""
+        from mra.schemas import FigureSet
+
+        payload = json.dumps({
+            "figures": [{
+                "number": 1, "handle": "h", "argument": "a",
+                "panels": [{"label": "A", "claim": "c", "shows": "s",
+                            "plot_type": "p", "source": "demo_data.csv", "caveats": []}],
+                "caption": "cap", "missing": [],
+            }],
+            "story": "s",
+            "caption_overclaims": [],
+            "better_as_table": '["Cohort/demographic table — a table, not a figure."]',
+            "supplementary": [],
+        })
+        stub = StubOpenAI([reply(arguments=payload)])
+        result = openai_llm(stub).parse("sys", [{"role": "user", "content": "go"}], FigureSet)
+
+        assert result.better_as_table == ["Cohort/demographic table — a table, not a figure."]
+        assert len(stub.requests) == 1, "no retry needed for an encoding slip"

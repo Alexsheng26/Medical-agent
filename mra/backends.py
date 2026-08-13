@@ -244,6 +244,49 @@ def parse_json_object(raw: str) -> str | None:
     return text[start : start + end]
 
 
+def coerce_json_strings(data: Any, schema: dict[str, Any]) -> Any:
+    """Undo double-encoded fields, guided by the schema.
+
+    Tool calling sometimes JSON-stringifies a nested value instead of emitting
+    it: DeepSeek returned `better_as_table` as `'["Cohort table...", ...]'`, a
+    string whose contents are the list that was wanted. Every item was there;
+    only the encoding was wrong.
+
+    Decoding is driven by the declared type and applied only when the decoded
+    value is the shape the schema asks for, so this repairs an encoding mistake
+    without ever reinterpreting a field that legitimately holds text — a
+    `caption` that happens to start with a bracket stays a caption.
+    """
+    if not isinstance(schema, dict):
+        return data
+
+    expected = schema.get("type")
+
+    if isinstance(data, str) and expected in {"array", "object"}:
+        try:
+            decoded = json.loads(data)
+        except ValueError:
+            return data
+        wanted = list if expected == "array" else dict
+        if isinstance(decoded, wanted):
+            log.info("Field arrived as a JSON string where %s was declared; decoded it.", expected)
+            return coerce_json_strings(decoded, schema)
+        return data
+
+    if isinstance(data, dict) and expected == "object":
+        properties = schema.get("properties", {})
+        return {
+            key: coerce_json_strings(value, properties[key]) if key in properties else value
+            for key, value in data.items()
+        }
+
+    if isinstance(data, list) and expected == "array":
+        items = schema.get("items", {})
+        return [coerce_json_strings(item, items) for item in data]
+
+    return data
+
+
 class OpenAIBackend:
     """Any OpenAI-compatible endpoint. DeepSeek is the reason this exists.
 
@@ -302,6 +345,7 @@ class OpenAIBackend:
             },
         }
         conversation = _to_openai_messages(system, messages)
+        parameters = tool["function"]["parameters"]
         usage = Usage()
         last_error = ""
 
@@ -319,12 +363,13 @@ class OpenAIBackend:
             payload = parse_json_object(raw) if raw is not None else None
             if payload is not None:
                 try:
+                    fields = coerce_json_strings(json.loads(payload), parameters)
                     return Reply(
-                        parsed=schema.model_validate_json(payload),
+                        parsed=schema.model_validate(fields),
                         usage=usage,
                         model=getattr(response, "model", model),
                     )
-                except ValidationError as exc:
+                except (ValidationError, ValueError) as exc:
                     last_error = str(exc)
             elif raw is None:
                 last_error = "no tool call in the reply"
