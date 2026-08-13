@@ -326,3 +326,35 @@ class TestDigestSpendGuard:
         out = capsys.readouterr().out
         assert "Estimated cost" in out
         assert "3 of 3 pending" in out
+
+
+class TestLogging:
+    """Raising the root level turns on every library's logger too. A researcher
+    running `mra doctor` saw two `INFO HTTP Request: POST ...` lines above their
+    result — noise in front of the person least able to tell noise from a fault."""
+
+    def test_library_chatter_is_suppressed(self, caplog):
+        import logging
+        cli._configure_logging(False)
+        with caplog.at_level(logging.INFO):
+            logging.getLogger("httpx").info("HTTP Request: POST /chat/completions")
+            logging.getLogger("openai._base_client").info("Retrying request")
+        assert logging.getLogger("httpx").getEffectiveLevel() > logging.INFO
+        assert logging.getLogger("openai").getEffectiveLevel() > logging.INFO
+
+    def test_our_own_messages_still_show(self):
+        import logging
+        cli._configure_logging(False)
+        assert logging.getLogger("mra.pipeline").getEffectiveLevel() <= logging.INFO
+
+    def test_a_library_warning_still_gets_through(self):
+        """Silencing chatter must not silence a library with a real problem."""
+        import logging
+        cli._configure_logging(False)
+        assert logging.getLogger("httpx").isEnabledFor(logging.WARNING)
+
+    def test_verbose_turns_up_only_our_own(self):
+        import logging
+        cli._configure_logging(True)
+        assert logging.getLogger("mra").getEffectiveLevel() == logging.DEBUG
+        assert not logging.getLogger("httpx").isEnabledFor(logging.INFO)

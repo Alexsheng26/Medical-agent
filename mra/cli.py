@@ -85,18 +85,30 @@ def read_text(path: Path) -> str:
         ) from exc
 
 
+def _configure_logging(verbose: bool) -> None:
+    """Show our own messages; stay out of the way of every library's.
+
+    Raising the *root* level to INFO turns on every third-party logger too, and
+    they are chatty: httpx prints a line per request, the OpenAI SDK prints one
+    per retry. A researcher running `mra doctor` saw two `INFO HTTP Request:
+    POST ...` lines above their result, which is noise in front of exactly the
+    person least able to tell noise from a problem.
+
+    So the root stays at WARNING — a library that has something genuinely wrong
+    to say still gets through — and only the `mra` namespace is turned up.
+    """
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
+    logging.basicConfig(level=logging.WARNING, handlers=[handler], force=True)
+    logging.getLogger("mra").setLevel(logging.DEBUG if verbose else logging.INFO)
+
+
 def main(argv: list[str] | None = None) -> int:
     _force_utf8_output()
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(levelname)s %(message)s",
-        stream=sys.stderr,
-    )
-    # httpx logs every request at INFO, which drowns our own output.
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    _configure_logging(args.verbose)
 
     if not args.command:
         parser.print_help()
