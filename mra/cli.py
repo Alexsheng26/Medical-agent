@@ -15,7 +15,7 @@ from pathlib import Path
 from . import assess as assess_mod
 from . import citations, deai, dialogue, journal as journal_mod, memory as memory_mod
 from . import brief as brief_mod
-from . import ingest, pipeline, writing
+from . import ingest, pipeline, review as review_mod, writing
 from .config import Config
 from .llm import LLM, RefusalError
 from .usage import Ledger
@@ -30,6 +30,7 @@ GUIDE = """
   第二步 磨假说        mra chat                        # 多轮苏格拉底式对话
                        mra hypothesis --note "第一版"  # 冻结为可版本比较的假说
                        mra proposal -o proposal.md     # 生成 proposal 框架
+                       mra review "主题" --outline-only # 综述：先看大纲，再决定写不写
   第三步 定期刊        mra assess data.csv --notes "n=12/组" # 评分 + 排序推荐候选期刊
                        mra journal add "Hepatology" --samples ./samples/hepatology
   第四步 对标评估      mra assess data.csv --journal Hepatology  # 对着该刊门槛再评一次
@@ -466,6 +467,52 @@ def cmd_proposal(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_review(args, cfg: Config) -> int:
+    """Plan a review, show the plan, then write it.
+
+    The outline is printed and confirmed before the sections are written. A
+    review is the most expensive thing this tool produces — one call per section
+    — and a structure the researcher would have changed is worth catching for
+    the price of the outline rather than the price of the whole draft.
+    """
+    with _store(cfg) as store:
+        llm = _llm(cfg)
+        outline, available = review_mod.plan(cfg, store, llm, args.topic)
+        print(review_mod.format_outline(outline, store, available))
+
+        if args.outline_only:
+            path = _write_out(
+                json.dumps(outline.model_dump(), ensure_ascii=False, indent=2),
+                args.output, cfg, "review.outline.json",
+            )
+            print(f"\n大纲已写入 {path}。改完之后去掉 --outline-only 再跑一次。")
+            return 0
+
+        sections = len(outline.sections)
+        if not args.yes:
+            print(f"\n下一步要写 {sections} 节，每节一次调用。")
+            if input("继续？[y/N] ").strip().lower() not in {"y", "yes"}:
+                print("已停在大纲这一步，没有花写作的钱。")
+                return 0
+
+        def progress(index: int, total: int, heading: str) -> None:
+            print(f"  [{index}/{total}] {heading}", flush=True)
+
+        print()
+        text, report = review_mod.write(
+            cfg, store, llm, outline, journal=args.journal or "", on_section=progress
+        )
+        if args.references:
+            text += "\n\n## References\n\n" + citations.reference_list(text, store)
+
+        path = _write_out(text, args.output, cfg, "review.md")
+        print(f"\nWritten to {path}\n")
+        print(report.summary())
+        print()
+        print(deai.analyze(text).summary())
+    return 0
+
+
 def cmd_journal_add(args, cfg: Config) -> int:
     with _store(cfg) as store:
         llm = _llm(cfg)
@@ -785,6 +832,15 @@ def build_parser() -> argparse.ArgumentParser:
     jp = jsub.add_parser("show", help="Print a stored profile")
     jp.set_defaults(func=cmd_journal_show)
     jp.add_argument("name")
+
+    p = add("review", cmd_review, "Write a review article from your knowledge base")
+    p.add_argument("topic", help='综述主题，例如 "TREM2 与 MASH 纤维化"')
+    p.add_argument("--journal", help="Match this journal's conventions (needs a stored profile)")
+    p.add_argument("--outline-only", action="store_true",
+                   help="Only plan it — cheap, and lets you fix the structure first")
+    p.add_argument("--references", action="store_true", help="Append a reference list")
+    p.add_argument("-y", "--yes", action="store_true", help="Skip the confirmation")
+    p.add_argument("-o", "--output")
 
     p = add("assess", cmd_assess, "Score your data, and pick a journal if you have not")
     p.add_argument("data", nargs="+", help="Data files (csv/tsv/txt/md)")

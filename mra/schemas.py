@@ -193,6 +193,50 @@ class JournalRecommendation(BaseModel):
     )
 
 
+class ReviewSection(BaseModel):
+    """One section of a review, with the papers it is answerable from."""
+
+    heading: str = Field(description="The section heading as it will appear")
+    argument: str = Field(
+        description="What this section establishes, in one or two sentences. Not a "
+        "topic label — the claim the section exists to make."
+    )
+    identifiers: list[str] = Field(
+        description="PMIDs or local: ids from the knowledge base that this section "
+        "must draw on. Only ids that appeared in the retrieved context."
+    )
+
+
+class ReviewOutline(BaseModel):
+    """The plan for a review, produced before any of it is written.
+
+    Written as a separate step so the researcher can correct the structure for a
+    few cents rather than after paying for several thousand words, and so each
+    section can be written against its own papers instead of the whole corpus.
+    """
+
+    title: str = Field(description="A specific title, not a topic label")
+    scope: str = Field(
+        description="What this review covers and — explicitly — what it does not, "
+        "given the papers actually in the knowledge base"
+    )
+    sections: list[ReviewSection] = Field(
+        description="4-8 sections in reading order, each with a distinct argument"
+    )
+    controversies: list[str] = Field(
+        description="Points where the stored papers disagree with each other. Name "
+        "the disagreeing ids. Empty only if the corpus genuinely contains no conflict."
+    )
+    gaps: list[str] = Field(
+        description="Questions this literature leaves open — the material for the "
+        "closing section and for the researcher's own next study"
+    )
+    unsupported: list[str] = Field(
+        description="Claims a reader would expect a review of this topic to make "
+        "that the stored papers cannot support. Better stated here than written."
+    )
+
+
 class WritingFingerprint(BaseModel):
     """The researcher's own writing habits, learned from their prior text."""
 
