@@ -168,6 +168,50 @@ def _raise_on_refusal(message) -> None:
 
 TOOL_NAME = "record_result"
 
+# How deep to inline before giving up. Structured-output schemas cannot recurse,
+# so anything this deep means something unexpected rather than a real document.
+MAX_INLINE_DEPTH = 12
+
+
+def inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
+    """Expand `$ref`/`$defs` so the schema stands on its own.
+
+    Pydantic emits a `$ref` for every nested model. DeepSeek's tool calling does
+    not resolve them: given a schema with `$defs` it returns an empty object,
+    twice, with no error — which surfaced as five "field required" failures on a
+    reply of `{}`. Flat schemas on the same endpoint work fine, so the reference
+    is the whole problem.
+
+    Inlining trades a larger request for one that any endpoint can read, and it
+    is a no-op for the flat schemas that already worked.
+    """
+    definitions = schema.get("$defs", {})
+    if not definitions:
+        return schema
+
+    def expand(node: Any, depth: int) -> Any:
+        if depth > MAX_INLINE_DEPTH:
+            return node
+        if isinstance(node, list):
+            return [expand(item, depth) for item in node]
+        if not isinstance(node, dict):
+            return node
+
+        reference = node.get("$ref")
+        if isinstance(reference, str) and reference.startswith("#/$defs/"):
+            target = definitions.get(reference.split("/")[-1])
+            if target is not None:
+                merged = expand(dict(target), depth + 1)
+                # Keep any sibling keys (description, title) that sat next to
+                # the $ref — dropping them loses the field's own documentation.
+                extra = {k: v for k, v in node.items() if k != "$ref"}
+                return {**merged, **extra}
+
+        return {key: expand(value, depth) for key, value in node.items()}
+
+    expanded = expand({k: v for k, v in schema.items() if k != "$defs"}, 0)
+    return expanded
+
 
 class OpenAIBackend:
     """Any OpenAI-compatible endpoint. DeepSeek is the reason this exists.
@@ -223,7 +267,7 @@ class OpenAIBackend:
             "function": {
                 "name": TOOL_NAME,
                 "description": (schema.__doc__ or "Record the structured result.").strip(),
-                "parameters": schema.model_json_schema(),
+                "parameters": inline_refs(schema.model_json_schema()),
             },
         }
         conversation = _to_openai_messages(system, messages)
@@ -262,13 +306,18 @@ class OpenAIBackend:
                      "correctly typed."},
                 ]
 
-        raise BackendError(
+        error = BackendError(
             f"{model} did not return a valid {schema.__name__} after "
             f"{PARSE_ATTEMPTS} attempts. Last error:\n{last_error[:800]}\n\n"
             "Structured commands (digest, assess, hypothesis, review) need an "
             "endpoint with working tool calling. Prose commands (chat, draft, "
             "nativize, polish) do not and should still work."
         )
+        # The attempts were billed whether or not they were usable, and a run
+        # that reported fewer calls than it made would understate what failing
+        # costs.
+        error.usage = usage
+        raise error
 
 
 class BackendError(RuntimeError):

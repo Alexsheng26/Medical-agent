@@ -128,14 +128,22 @@ class LLM:
         validated. Either way the caller gets an instance or an exception —
         never a half-filled object.
         """
-        reply = self.backend.parse(
-            model=self.cfg.model,
-            system=self._normalise_system(system, cache_upto),
-            messages=messages,
-            schema=schema,
-            max_tokens=max_tokens,
-            effort=effort or self.cfg.extraction_effort,
-        )
+        try:
+            reply = self.backend.parse(
+                model=self.cfg.model,
+                system=self._normalise_system(system, cache_upto),
+                messages=messages,
+                schema=schema,
+                max_tokens=max_tokens,
+                effort=effort or self.cfg.extraction_effort,
+            )
+        except Exception as exc:
+            # A failed parse still spent tokens. Reporting a run as cheaper than
+            # it was is the one accounting error that always flatters us.
+            spent = getattr(exc, "usage", None)
+            if spent is not None:
+                self._record(spent)
+            raise
         self._record(reply.usage)
         return reply.parsed  # type: ignore[return-value]
 

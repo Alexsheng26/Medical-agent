@@ -42,6 +42,17 @@ mra doctor
 > **DeepSeek 已实测通过**（`deepseek-chat`，2026-08）：纯文本 1.3s，结构化输出可用，
 > 全部命令都能跑。测试环境 Windows + Python 3.14。
 
+**关于 JSON Schema 的一个坑（已处理）：** pydantic 对每个嵌套模型都会生成 `$ref` +
+`$defs`，而 DeepSeek 的 tool calling **不解析引用**——给它带 `$defs` 的 schema，
+它返回一个空对象 `{}`，不报错。所以 `figures` / `review` / `assess` 这些字段嵌套的命令
+会连挂两次，而 `digest`（`LitCard` 是平的）却正常。
+
+现在发送前会把引用**全部内联展开**，代价是请求大一点，好处是任何端点都读得懂，
+而且对本来就是平的 schema 是空操作。有测试逐个检查我们发出去的每一个 schema 里
+不再残留 `$ref`。
+
+如果你接的是别的兼容端点、又遇到类似的"返回空对象"，先怀疑 schema 那一层。
+
 ---
 
 ## 能用什么，不能用什么

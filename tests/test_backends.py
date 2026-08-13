@@ -255,3 +255,76 @@ class TestCredentialCheck:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
         monkeypatch.setattr(cli, "LLM", lambda cfg, ledger=None: "built")
         assert cli._llm(Config(workspace=tmp_path)) == "built"
+
+
+class TestSchemaInlining:
+    """DeepSeek's tool calling does not resolve $ref: given a schema with $defs
+    it returned an empty object twice, with no error. Flat schemas on the same
+    endpoint worked, so the reference itself was the whole problem."""
+
+    def test_a_flat_schema_is_untouched(self):
+        schema = Card.model_json_schema()
+        assert backends.inline_refs(schema) is schema
+
+    def test_nested_models_are_expanded(self):
+        from mra.schemas import FigureSet
+
+        inlined = backends.inline_refs(FigureSet.model_json_schema())
+        assert "$defs" not in inlined
+        assert "$ref" not in json.dumps(inlined)
+
+    def test_the_expanded_schema_still_describes_the_leaves(self):
+        from mra.schemas import FigureSet
+
+        inlined = backends.inline_refs(FigureSet.model_json_schema())
+        panels = inlined["properties"]["figures"]["items"]["properties"]["panels"]
+        assert "label" in panels["items"]["properties"]
+        assert "claim" in panels["items"]["properties"]
+
+    def test_a_field_keeps_its_own_description(self):
+        """A $ref sits beside the field's description; dropping the siblings
+        would lose the instruction the model needs."""
+        from mra.schemas import FigureSet
+
+        inlined = backends.inline_refs(FigureSet.model_json_schema())
+        assert "reading order" in inlined["properties"]["figures"]["description"]
+
+    def test_every_schema_we_send_survives_inlining(self):
+        """A schema that still carries $ref reaches DeepSeek as an empty reply."""
+        from mra import schemas as s
+
+        models = [
+            s.SearchTerms, s.LitCard, s.Hypothesis, s.JournalProfile,
+            s.FitAssessment, s.JournalRecommendation, s.ReviewOutline,
+            s.FigureSet, s.LocalArticleMeta, s.BriefImpact, s.WritingFingerprint,
+        ]
+        for model in models:
+            inlined = backends.inline_refs(model.model_json_schema())
+            assert "$ref" not in json.dumps(inlined), f"{model.__name__} still has a $ref"
+
+    def test_the_tool_definition_carries_the_inlined_schema(self):
+        from mra.schemas import FigureSet
+
+        stub = StubOpenAI([reply(arguments='{"figures": [], "story": "s", '
+                                 '"caption_overclaims": [], "better_as_table": [], '
+                                 '"supplementary": []}')])
+        openai_llm(stub).parse("sys", [{"role": "user", "content": "go"}], FigureSet)
+        sent = json.dumps(stub.requests[0]["tools"][0]["function"]["parameters"])
+        assert "$ref" not in sent and "$defs" not in sent
+
+
+class TestFailedParseAccounting:
+    def test_tokens_spent_on_a_failed_parse_are_recorded(self):
+        """The run reported one call after making three. Under-reporting cost is
+        the one accounting error that always flatters us."""
+        from mra.usage import Ledger
+
+        ledger = Ledger()
+        stub = StubOpenAI([reply(arguments="{}", prompt=1500, completion=141)] * 2)
+        llm = LLM(Config(provider="openai", model="deepseek-chat"), client=stub, ledger=ledger)
+
+        with pytest.raises(backends.BackendError):
+            llm.parse("sys", [{"role": "user", "content": "go"}], Card)
+
+        assert ledger.session.calls == 2
+        assert ledger.session.input_tokens == 3000
