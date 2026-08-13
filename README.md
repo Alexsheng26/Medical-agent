@@ -378,6 +378,7 @@ Re-run with --max-cost to set a ceiling, or --yes to accept.
 |---|---|:---:|
 | `mra init` | 建立工作区 | |
 | `mra guide` | 中文流程速查 | |
+| `mra doctor` | 连接自检：key / 连通性 / tool calling | ✓（两次极小调用） |
 | `mra status` | 当前工作区概况 | |
 | `mra search TOPIC` | 规划检索式并抓取 PubMed | ✓ |
 | `mra import FILE...` | 导入 PubMed XML / PDF / 纯文本 | XML 不需要 |

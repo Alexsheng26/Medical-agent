@@ -14,6 +14,7 @@ from pathlib import Path
 
 from . import assess as assess_mod
 from . import backends
+from . import doctor as doctor_mod
 from . import citations, deai, dialogue, journal as journal_mod, memory as memory_mod
 from . import brief as brief_mod
 from . import figures as figures_mod
@@ -232,6 +233,17 @@ def cmd_init(args, cfg: Config) -> int:
         print("\nTip: `mra init --email you@example.com` — NCBI asks for a contact address.")
     print("\nRun `mra guide` for the workflow.")
     return 0
+
+
+def cmd_doctor(args, cfg: Config) -> int:
+    """Two tiny calls that answer 'will this actually work here'.
+
+    The developing environment cannot reach every provider, so whether a given
+    endpoint works is a question only the researcher's own machine can answer.
+    """
+    report = doctor_mod.run(cfg)
+    print(doctor_mod.format_report(cfg, report))
+    return 0 if report.prose_ok else 1
 
 
 def cmd_status(args, cfg: Config) -> int:
@@ -847,6 +859,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--email", help="Contact address for NCBI E-utilities")
     p.add_argument("--language", choices=["zh", "en"], help="Conversation language")
 
+    add("doctor", cmd_doctor, "Check the model connection actually works")
     add("status", cmd_status, "Show what is in the workspace")
 
     p = add("search", cmd_search, "Search PubMed and store results")

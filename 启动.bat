@@ -139,6 +139,7 @@ echo    5  查看状态      文献数、假说、花费
 echo    6  引用核对      检查文稿里的引用是否真实（不花钱）
 echo    7  试用示例      导入仓库自带的 8 篇示例文献
 echo    8  打开数据目录
+echo    9  连接自检      模型连不通时先跑这个
 echo    0  退出
 echo.
 set "CHOICE="
@@ -152,6 +153,7 @@ if "%CHOICE%"=="5" goto :do_status
 if "%CHOICE%"=="6" goto :do_refs
 if "%CHOICE%"=="7" goto :do_demo
 if "%CHOICE%"=="8" goto :do_open
+if "%CHOICE%"=="9" goto :do_doctor
 if "%CHOICE%"=="0" goto :done
 echo   没有这个选项，请重新选。
 goto :menu
@@ -208,6 +210,10 @@ goto :after
 "%~dp0%VENV%" -m mra import "%~dp0examples\demo_corpus.xml"
 echo.
 echo   导入完成。可以选 3 试着问：这批文献里最大的矛盾是什么
+goto :after
+
+:do_doctor
+"%~dp0%VENV%" -m mra doctor
 goto :after
 
 :do_open

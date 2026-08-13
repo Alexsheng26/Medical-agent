@@ -18,6 +18,15 @@ pip install openai        # 只有走这条路才需要
 { "provider": "openai", "base_url": "https://api.deepseek.com", "model": "deepseek-chat" }
 ```
 
+**接完先自检**，两次极小的调用，几厘钱：
+
+```bash
+mra doctor
+```
+
+它会告诉你 key 认不认、连不连得通、以及**最关键的一条：这个端点的 tool calling 能不能用**。
+不能用的话，下面那张表里"结构化"那一半的命令全都跑不了，它会直接把两份清单列出来。
+
 ---
 
 ## 能用什么，不能用什么
