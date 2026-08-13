@@ -32,6 +32,11 @@ class Config:
     workspace: Path = field(default_factory=lambda: Path.cwd() / ".mra")
 
     # --- model ---
+    # `provider` picks the backend: "anthropic" (default, full features) or
+    # "openai" for any OpenAI-compatible endpoint such as DeepSeek. See
+    # docs/PROVIDERS.md for what each one can and cannot do.
+    provider: str = "anthropic"
+    base_url: str = ""
     model: str = DEFAULT_MODEL
     effort: str = DEFAULT_EFFORT
     extraction_effort: str = DEFAULT_EXTRACTION_EFFORT
@@ -101,6 +106,8 @@ class Config:
         # Environment always outranks the config file, so a shared config can be
         # checked in while secrets stay in the environment.
         env_map = {
+            "MRA_PROVIDER": "provider",
+            "MRA_BASE_URL": "base_url",
             "MRA_MODEL": "model",
             "MRA_EFFORT": "effort",
             "MRA_CHAT_LANGUAGE": "chat_language",

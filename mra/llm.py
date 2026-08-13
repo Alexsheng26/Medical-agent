@@ -1,7 +1,8 @@
-"""Claude client wrapper.
+"""Model client wrapper.
 
-Everything that talks to the model goes through here, so that caching, effort,
-refusal handling and fallbacks are configured in exactly one place.
+Everything that talks to a model goes through here, so caching, effort, refusal
+handling, fallbacks and cost accounting are configured in exactly one place.
+*Which* model is a separate question, answered in `backends.py`.
 """
 
 from __future__ import annotations
@@ -10,9 +11,10 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Sequence, TypeVar
 
-import anthropic
 from pydantic import BaseModel
 
+from . import backends
+from .backends import RefusalError  # re-exported: callers catch it from here
 from .config import Config
 from .usage import Ledger, Usage
 
@@ -20,26 +22,10 @@ log = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
-# Safety classifiers on Opus 5 can decline a request, and life-sciences work sits
-# close enough to the bio category to trip them occasionally. Server-side
-# fallbacks re-serve a declined request on another model inside the same call,
-# routed by refusal category.
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
+STREAM_THRESHOLD = backends.STREAM_THRESHOLD
+FALLBACK_BETA = backends.FALLBACK_BETA
 
-# Above roughly 16k output tokens a non-streaming request risks an HTTP timeout.
-STREAM_THRESHOLD = 16000
-
-
-class RefusalError(RuntimeError):
-    """The model (and any fallback) declined to answer."""
-
-    def __init__(self, category: str | None, explanation: str | None):
-        self.category = category
-        self.explanation = explanation
-        super().__init__(
-            f"Model declined this request (category={category or 'unspecified'}). "
-            f"{explanation or ''}".strip()
-        )
+__all__ = ["LLM", "LLMResult", "RefusalError", "system_blocks", "STREAM_THRESHOLD"]
 
 
 @dataclass
@@ -77,20 +63,16 @@ def system_blocks(*parts: str, cache_upto: int = -1) -> list[dict[str, Any]]:
 
 
 class LLM:
-    def __init__(
-        self,
-        cfg: Config,
-        client: anthropic.Anthropic | None = None,
-        ledger: Ledger | None = None,
-    ):
+    def __init__(self, cfg: Config, client=None, ledger: Ledger | None = None):
         self.cfg = cfg
-        self.client = client or anthropic.Anthropic()
+        self.backend = backends.build(cfg, client=client)
         # Every call is recorded here so the CLI can report what a command cost.
         self.ledger = ledger
-        # Flipped off permanently the first time the endpoint rejects the beta,
-        # so a gateway without fallback support costs one failed call, not one
-        # per request.
-        self._fallbacks_available = True
+
+    @property
+    def client(self):
+        """The underlying SDK client. Kept for tests that assert on the wire."""
+        return self.backend.client
 
     # ------------------------------------------------------------------ text
 
@@ -109,31 +91,22 @@ class LLM:
         (retrieval context, the researcher's data, a document being rewritten):
         only the stable prefix is then cached.
         """
-        system_param = self._normalise_system(system, cache_upto)
         max_tokens = max_tokens or self.cfg.max_tokens
-        effort = effort or self.cfg.effort
-
-        params: dict[str, Any] = {
-            "model": self.cfg.model,
-            "max_tokens": max_tokens,
-            "system": system_param,
-            "messages": messages,
-            "thinking": {"type": "adaptive"},
-            "output_config": {"effort": effort},
-        }
-
-        message = self._create(params, stream=max_tokens > STREAM_THRESHOLD)
-        self._raise_on_refusal(message)
-
-        text = "".join(b.text for b in message.content if b.type == "text")
-        recorded = self._record(message)
+        reply = self.backend.text(
+            model=self.cfg.model,
+            system=self._normalise_system(system, cache_upto),
+            messages=messages,
+            max_tokens=max_tokens,
+            effort=effort or self.cfg.effort,
+        )
+        self._record(reply.usage)
         return LLMResult(
-            text=text.strip(),
-            input_tokens=recorded.input_tokens,
-            output_tokens=recorded.output_tokens,
-            cache_read_tokens=recorded.cache_read_tokens,
-            cache_write_tokens=recorded.cache_write_tokens,
-            model=message.model,
+            text=reply.text,
+            input_tokens=reply.usage.input_tokens,
+            output_tokens=reply.usage.output_tokens,
+            cache_read_tokens=reply.usage.cache_read_tokens,
+            cache_write_tokens=reply.usage.cache_write_tokens,
+            model=reply.model,
         )
 
     # ----------------------------------------------------------------- parse
@@ -150,87 +123,44 @@ class LLM:
     ) -> T:
         """Generate a validated instance of `schema`.
 
-        Structured outputs constrain the response to the schema, which is what
-        keeps extraction and scoring machine-readable instead of prose we have
-        to regex afterwards.
+        On Anthropic the response is constrained to the schema; on an
+        OpenAI-compatible endpoint it is a forced tool call that is then
+        validated. Either way the caller gets an instance or an exception —
+        never a half-filled object.
         """
-        response = self.client.messages.parse(
+        reply = self.backend.parse(
             model=self.cfg.model,
-            max_tokens=max_tokens,
             system=self._normalise_system(system, cache_upto),
             messages=messages,
-            thinking={"type": "adaptive"},
-            output_config={"effort": effort or self.cfg.extraction_effort},
-            output_format=schema,
+            schema=schema,
+            max_tokens=max_tokens,
+            effort=effort or self.cfg.extraction_effort,
         )
-        self._raise_on_refusal(response)
-        self._record(response)
-        parsed = response.parsed_output
-        if parsed is None:
-            raise RuntimeError(
-                "Model returned no parseable output. This usually means max_tokens "
-                "was hit mid-object; retry with a larger budget."
-            )
-        return parsed
+        self._record(reply.usage)
+        return reply.parsed  # type: ignore[return-value]
 
     # --------------------------------------------------------------- internals
 
-    @staticmethod
     def _normalise_system(
+        self,
         system: str | Sequence[str] | list[dict[str, Any]],
         cache_upto: int = -1,
     ) -> list[dict[str, Any]]:
+        blocks: list[dict[str, Any]]
         if isinstance(system, str):
-            return system_blocks(system, cache_upto=cache_upto)
-        if system and isinstance(system[0], dict):
-            return list(system)  # type: ignore[arg-type]
-        return system_blocks(*system, cache_upto=cache_upto)  # type: ignore[arg-type]
+            blocks = system_blocks(system, cache_upto=cache_upto)
+        elif system and isinstance(system[0], dict):
+            blocks = list(system)  # type: ignore[arg-type]
+        else:
+            blocks = system_blocks(*system, cache_upto=cache_upto)  # type: ignore[arg-type]
 
-    def _create(self, params: dict[str, Any], *, stream: bool):
-        if self._fallbacks_available:
-            beta_params = dict(params, fallbacks="default", betas=[FALLBACK_BETA])
-            try:
-                return self._dispatch(self.client.beta.messages, beta_params, stream=stream)
-            except (anthropic.BadRequestError, anthropic.NotFoundError) as exc:
-                if not self._looks_like_missing_beta(exc):
-                    raise
-                log.info("Server-side fallbacks unavailable on this endpoint; continuing without.")
-                self._fallbacks_available = False
+        if not self.backend.supports_caching:
+            # A cache_control key on an endpoint that does not know it is at best
+            # ignored and at worst a 400. Strip it rather than hope.
+            blocks = [{k: v for k, v in b.items() if k != "cache_control"} for b in blocks]
+        return blocks
 
-        return self._dispatch(self.client.messages, params, stream=stream)
-
-    @staticmethod
-    def _dispatch(resource, params: dict[str, Any], *, stream: bool):
-        if stream:
-            with resource.stream(**params) as s:
-                return s.get_final_message()
-        return resource.create(**params)
-
-    @staticmethod
-    def _looks_like_missing_beta(exc: Exception) -> bool:
-        text = str(exc).lower()
-        return "fallback" in text or "beta" in text
-
-    def _record(self, message) -> Usage:
-        """Pull token counts off a response and add them to the ledger."""
-        raw = getattr(message, "usage", None)
-        usage = Usage(
-            calls=1,
-            input_tokens=getattr(raw, "input_tokens", 0) or 0,
-            output_tokens=getattr(raw, "output_tokens", 0) or 0,
-            cache_read_tokens=getattr(raw, "cache_read_input_tokens", 0) or 0,
-            cache_write_tokens=getattr(raw, "cache_creation_input_tokens", 0) or 0,
-        )
+    def _record(self, usage: Usage) -> Usage:
         if self.ledger is not None:
             self.ledger.record(usage)
         return usage
-
-    @staticmethod
-    def _raise_on_refusal(message) -> None:
-        if getattr(message, "stop_reason", None) != "refusal":
-            return
-        details = getattr(message, "stop_details", None)
-        raise RefusalError(
-            getattr(details, "category", None),
-            getattr(details, "explanation", None),
-        )

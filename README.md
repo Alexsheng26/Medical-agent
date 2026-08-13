@@ -49,6 +49,11 @@ mra guide                                  # 中文流程速查
 
 需要 Python ≥ 3.10。第三方依赖只有两个：`anthropic` 和 `pypdf`。
 
+> **想用 DeepSeek 之类更便宜的模型？** 看 **[docs/PROVIDERS.md](docs/PROVIDERS.md)**。
+> 纯文本的命令（`chat` / `draft` / `polish`）直接可用；结构化的命令
+> （`digest` / `assess` / `review`）要求对方的 tool calling 可用。缓存、effort、
+> 拒绝时的 fallback 会消失——影响成本和稳健性，不影响正确性。
+
 > 装不上、或者报了看不懂的错？**[docs/SETUP.md](docs/SETUP.md)** 有分平台的完整步骤
 > 和一份常见报错对照表（PATH、`setx` 不生效、PubMed 被校园网挡、编码报错等）。
 
