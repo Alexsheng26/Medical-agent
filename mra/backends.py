@@ -213,6 +213,37 @@ def inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
     return expanded
 
 
+def parse_json_object(raw: str) -> str | None:
+    """Take the first complete JSON object out of a reply.
+
+    An endpoint may put valid JSON somewhere inside a larger string — wrapped in
+    a Markdown fence, followed by a stray sentence, or with a second object
+    concatenated after the first. DeepSeek returned 20 kB of a perfectly good
+    figure plan followed by trailing characters, and strict parsing threw the
+    whole thing away over the tail.
+
+    Taking the first complete value is safe in a way that patching the string
+    would not be: the object either parses on its own or it does not, so nothing
+    is invented to make it fit.
+    """
+    text = raw.strip()
+    if text.startswith("```"):
+        # ```json ... ``` — drop the fence line and anything after the close.
+        text = text.split("\n", 1)[-1]
+        if "```" in text:
+            text = text.rsplit("```", 1)[0]
+        text = text.strip()
+
+    start = text.find("{")
+    if start < 0:
+        return None
+    try:
+        _, end = json.JSONDecoder().raw_decode(text[start:])
+    except ValueError:
+        return None
+    return text[start : start + end]
+
+
 class OpenAIBackend:
     """Any OpenAI-compatible endpoint. DeepSeek is the reason this exists.
 
@@ -285,17 +316,20 @@ class OpenAIBackend:
             usage.add(_openai_usage(response))
 
             raw = _tool_arguments(response)
-            if raw is not None:
+            payload = parse_json_object(raw) if raw is not None else None
+            if payload is not None:
                 try:
                     return Reply(
-                        parsed=schema.model_validate_json(raw),
+                        parsed=schema.model_validate_json(payload),
                         usage=usage,
                         model=getattr(response, "model", model),
                     )
                 except ValidationError as exc:
                     last_error = str(exc)
-            else:
+            elif raw is None:
                 last_error = "no tool call in the reply"
+            else:
+                last_error = f"no parseable JSON object in the reply ({len(raw)} characters)"
 
             if attempt + 1 < PARSE_ATTEMPTS:
                 log.info("Structured reply did not validate; retrying once.")
@@ -335,7 +369,7 @@ def _tool_arguments(response) -> str | None:
         # Some gateways ignore tool_choice and answer in content instead. If that
         # content is JSON it is still usable, so try before giving up.
         content = (getattr(message, "content", "") or "").strip()
-        return content if content.startswith("{") else None
+        return content or None
     return calls[0].function.arguments
 
 

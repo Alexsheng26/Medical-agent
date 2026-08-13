@@ -328,3 +328,40 @@ class TestFailedParseAccounting:
 
         assert ledger.session.calls == 2
         assert ledger.session.input_tokens == 3000
+
+
+class TestJsonRecovery:
+    """DeepSeek returned 20 kB of a good figure plan followed by trailing
+    characters, and strict parsing threw all of it away over the tail."""
+
+    def test_clean_json_is_unchanged(self):
+        assert json.loads(backends.parse_json_object('{"a": 1}')) == {"a": 1}
+
+    def test_trailing_characters_are_dropped(self):
+        raw = '{"a": 1} — I hope this helps!'
+        assert json.loads(backends.parse_json_object(raw)) == {"a": 1}
+
+    def test_a_second_concatenated_object_is_ignored(self):
+        assert json.loads(backends.parse_json_object('{"a": 1}{"a": 2}')) == {"a": 1}
+
+    def test_a_markdown_fence_is_stripped(self):
+        assert json.loads(backends.parse_json_object('```json\n{"a": 1}\n```')) == {"a": 1}
+
+    def test_leading_prose_before_the_object(self):
+        assert json.loads(backends.parse_json_object('Here you go: {"a": 1}')) == {"a": 1}
+
+    def test_nothing_parseable_returns_none(self):
+        assert backends.parse_json_object("I could not do that.") is None
+
+    def test_a_truncated_object_is_not_salvaged(self):
+        """An object cut off mid-write must fail, not be padded into shape."""
+        assert backends.parse_json_object('{"a": 1, "b": [1, 2') is None
+
+    def test_a_trailing_tail_no_longer_fails_the_command(self):
+        stub = StubOpenAI([reply(arguments='{"title": "t", "score": 3} extra words')])
+        assert openai_llm(stub).parse("sys", [{"role": "user", "content": "go"}], Card).score == 3
+
+    def test_the_unparseable_case_says_how_much_came_back(self):
+        stub = StubOpenAI([reply(arguments="not json at all")] * 2)
+        with pytest.raises(backends.BackendError, match="no parseable JSON"):
+            openai_llm(stub).parse("sys", [{"role": "user", "content": "go"}], Card)
