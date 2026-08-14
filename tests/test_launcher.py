@@ -110,20 +110,56 @@ def test_menu_digits_all_dispatch(lines: list[str]):
     assert offered <= dispatched, f"menu items with no handler: {sorted(offered - dispatched)}"
 
 
-def test_venv_python_is_used_after_pushd(lines: list[str]):
-    """After `pushd`, a relative .venv path points at the *data* directory.
+def test_no_multiline_parenthesised_blocks(lines: list[str]):
+    """A block spanning lines is where cmd's UTF-8 handling comes apart.
 
-    Every command past that point has to reach back with %~dp0, or the launcher
-    looks for the interpreter inside the researcher's workspace folder.
+    Under `chcp 65001` cmd re-reads a batch file by byte offset while executing
+    a block, and multi-byte characters desync those offsets: a line gets cut
+    mid-character and its tail is run as a command. Observed on the first real
+    Windows run — an error message inside `if errorlevel 1 (...)` came back as
+
+        '<mojibake>长，试着把整个文件夹移到' is not recognized as an
+        internal or external command
+
+    printing garbage in place of the explanation the researcher needed. Labels
+    and goto have no such failure mode, so the file uses them throughout.
     """
-    after_pushd = False
+    offenders = []
     for number, line in enumerate(lines, 1):
-        if re.search(r"^\s*pushd\b", line, re.IGNORECASE):
-            after_pushd = True
+        if PROSE.match(line):
             continue
-        if not after_pushd or "-m mra" not in line:
+        outside_quotes = re.sub(r'"[^"]*"', "", line)
+        # `for /f ... do (` and `if ... (` opening a block, i.e. a trailing (
+        if re.search(r"\(\s*$", outside_quotes):
+            offenders.append(number)
+
+    assert not offenders, (
+        f"multi-line parenthesised block(s) at line(s) {offenders} — use a label "
+        "and goto instead; cmd splits Chinese text inside blocks"
+    )
+
+
+def test_interpreter_is_absolute_everywhere(lines: list[str]):
+    """%RUN% has to be absolute: after pushd, a relative path resolves into the
+    researcher's data folder, where no interpreter lives."""
+    assignments = [
+        line
+        for line in lines
+        # `set "RUN="` clears it at the top; only real values need checking.
+        if re.match(r'^\s*set\s+"RUN=.+"', line, re.IGNORECASE)
+    ]
+    assert assignments, "RUN is never assigned"
+    for line in assignments:
+        assert "%~dp0" in line or "%%p" in line or "%VENVPY%" in line, (
+            f"RUN assigned a possibly relative path: {line.strip()}"
+        )
+
+
+def test_every_invocation_uses_run(lines: list[str]):
+    for number, line in enumerate(lines, 1):
+        if "-m mra" not in line or PROSE.match(line):
             continue
-        assert "%~dp0" in line, f"line {number}: mra invoked without %~dp0 after pushd"
+        assert '"%RUN%"' in line, f"line {number}: mra invoked without %RUN%"
 
 
 def test_deepseek_branch_sets_every_variable_the_backend_reads(raw: str):

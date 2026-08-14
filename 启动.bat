@@ -5,7 +5,9 @@ cd /d "%~dp0"
 title 科研中间体 MRA
 
 set "PYEXE="
-set "VENV=.venv\Scripts\python.exe"
+set "RUN="
+set "PIPFLAGS="
+set "VENVPY=%~dp0.venv\Scripts\python.exe"
 set "WORK=%~dp0workspace"
 
 echo.
@@ -20,70 +22,81 @@ REM to actually print something. The stub prints nothing at all, which is the
 REM failure that looks exactly like success.
 
 for /f "delims=" %%v in ('py -3 -c "import sys;print(sys.version_info[0]*100+sys.version_info[1])" 2^>nul') do set "PYVER=%%v"
-if defined PYVER (
-    set "PYEXE=py -3"
-) else (
-    for /f "delims=" %%v in ('python -c "import sys;print(sys.version_info[0]*100+sys.version_info[1])" 2^>nul') do set "PYVER=%%v"
-    if defined PYVER set "PYEXE=python"
-)
+if defined PYVER set "PYEXE=py -3"
+if defined PYEXE goto :py_found
+for /f "delims=" %%v in ('python -c "import sys;print(sys.version_info[0]*100+sys.version_info[1])" 2^>nul') do set "PYVER=%%v"
+if defined PYVER set "PYEXE=python"
+:py_found
 
-if not defined PYEXE (
-    echo   [X] 没有找到可用的 Python。
-    echo.
-    echo   注意：如果你刚才敲 python 时"什么都没显示、也没报错"，
-    echo   那不是装好了 —— Windows 自带一个指向应用商店的假 python，
-    echo   没装 Python 时敲它会静默跳转商店，每条命令都零输出零报错。
-    echo.
-    echo   请这样做：
-    echo     1. 打开 https://www.python.org/downloads/ 下载安装包
-    echo     2. 安装第一屏务必勾上 "Add python.exe to PATH"（在窗口最下面）
-    echo     3. 装完关掉所有命令行窗口，重新双击本文件
-    echo.
-    start "" "https://www.python.org/downloads/"
-    goto :halt
-)
+if defined PYEXE goto :py_ok
+echo   [X] 没有找到可用的 Python。
+echo.
+echo   注意：如果你刚才敲 python 时"什么都没显示、也没报错"，
+echo   那不是装好了 —— Windows 自带一个指向应用商店的假 python，
+echo   没装 Python 时敲它会静默跳转商店，每条命令都零输出零报错。
+echo.
+echo   请这样做：
+echo     1. 打开 https://www.python.org/downloads/ 下载安装包
+echo     2. 安装第一屏务必勾上 "Add python.exe to PATH"（在窗口最下面）
+echo     3. 装完关掉所有命令行窗口，重新双击本文件
+echo.
+start "" "https://www.python.org/downloads/"
+goto :halt
+:py_ok
 
-if %PYVER% LSS 310 (
-    echo   [X] Python 版本太旧（需要 3.10 或更高）。
-    echo       请到 https://www.python.org/downloads/ 装一个新版本。
-    echo.
-    start "" "https://www.python.org/downloads/"
-    goto :halt
-)
+if %PYVER% GEQ 310 goto :py_new_enough
+echo   [X] Python 版本太旧（需要 3.10 或更高）。
+echo       请到 https://www.python.org/downloads/ 装一个新版本。
+echo.
+start "" "https://www.python.org/downloads/"
+goto :halt
+:py_new_enough
 
 echo   [OK] Python 已就绪
 
 REM ------------------------------------------------------------------ 环境
 REM A private virtual environment, so this never disturbs anything else on the
-REM machine and `mra` never has to be found on PATH — it is always invoked as
-REM `.venv\Scripts\python.exe -m mra`.
+REM machine and `mra` never has to be found on PATH — everything downstream is
+REM invoked as `"%RUN%" -m mra`, and %RUN% is an absolute interpreter path
+REM whichever branch below set it.
 
-if not exist "%VENV%" (
-    echo   [..] 首次运行，正在创建独立运行环境（约 1 分钟）
-    %PYEXE% -m venv .venv
-    if errorlevel 1 (
-        echo   [X] 运行环境创建失败。
-        echo       如果你的用户名含中文或路径很长，试着把整个文件夹移到 D:\mra 再运行。
-        goto :halt
-    )
-)
+if exist "%VENVPY%" goto :venv_ready
+echo   [..] 首次运行，正在创建独立运行环境（约 1 分钟）
+%PYEXE% -m venv "%~dp0.venv"
+if exist "%VENVPY%" goto :venv_ready
 
-if not exist "%VENV%" (
-    echo   [X] 运行环境不完整，请删掉本文件夹里的 .venv 目录后重试。
-    goto :halt
-)
+REM Creating a venv copies python.exe, which is exactly what antivirus tools
+REM block (WinError 5). That is not a reason to stop: installing into the user
+REM directory copies no interpreter and reaches the same place.
 
-"%VENV%" -c "import mra" >nul 2>&1
-if errorlevel 1 (
-    echo   [..] 正在安装依赖（首次约 2 分钟，需要联网）
-    "%VENV%" -m pip install --disable-pip-version-check -q -e .
-    if errorlevel 1 (
-        echo   [X] 依赖安装失败。最常见原因是网络不通或公司/学校网络拦截了 pypi。
-        echo       可以试试国内镜像：
-        echo       .venv\Scripts\python.exe -m pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
-        goto :halt
-    )
-)
+echo.
+echo   [!] 独立运行环境建不起来。最常见的是杀毒软件拦住了复制 python.exe，
+echo       其次是这个盘/文件夹不让写（报 WinError 5 拒绝访问）。
+echo       不影响使用 —— 改成装到你的用户目录下，功能完全一样。
+echo.
+for /f "delims=" %%p in ('%PYEXE% -c "import sys;print(sys.executable)" 2^>nul') do set "RUN=%%p"
+set "PIPFLAGS=--user"
+goto :env_chosen
+
+:venv_ready
+set "RUN=%VENVPY%"
+
+:env_chosen
+if defined RUN goto :run_ok
+echo   [X] 找不到可用的 Python 解释器路径，无法继续。
+goto :halt
+:run_ok
+
+"%RUN%" -c "import mra" >nul 2>&1
+if not errorlevel 1 goto :deps_ok
+echo   [..] 正在安装依赖（首次约 2 分钟，需要联网）
+"%RUN%" -m pip install --disable-pip-version-check -q %PIPFLAGS% -e .
+if not errorlevel 1 goto :deps_ok
+echo   [X] 依赖安装失败。最常见原因是网络不通，或公司/学校网络拦截了 pypi。
+echo       试试国内镜像 —— 把下面这一整行复制到本窗口里回车：
+echo       "%RUN%" -m pip install %PIPFLAGS% -e "%~dp0." -i https://pypi.tuna.tsinghua.edu.cn/simple
+goto :halt
+:deps_ok
 
 echo   [OK] 运行环境已就绪
 
@@ -146,10 +159,10 @@ REM DeepSeek 走的是 OpenAI 兼容接口，要多装一个包。检查放在�
 REM 因为用户也可能是自己设好环境变量来的，没走上面那个菜单。
 
 if /i not "%MRA_PROVIDER%"=="openai" goto :ready
-"%VENV%" -c "import openai" >nul 2>&1
+"%RUN%" -c "import openai" >nul 2>&1
 if not errorlevel 1 goto :ready
 echo   [..] 正在安装 DeepSeek 需要的组件（约 20 秒）
-"%VENV%" -m pip install --disable-pip-version-check -q openai
+"%RUN%" -m pip install --disable-pip-version-check -q openai
 if errorlevel 1 echo   [X] 装不上。菜单里选 9 连接自检，能看到具体原因。
 :ready
 
@@ -164,7 +177,7 @@ echo.
 echo   首次初始化工作目录。
 set "EMAIL="
 set /p "EMAIL=你的邮箱（NCBI 检索要求提供，可直接回车跳过）: "
-"%~dp0%VENV%" -m mra init --email "%EMAIL%" >nul 2>&1
+"%RUN%" -m mra init --email "%EMAIL%" >nul 2>&1
 :inited
 
 REM ------------------------------------------------------------------- 菜单
@@ -207,11 +220,11 @@ echo   把 PDF 文件拖进这个窗口然后回车（可以先拖一个试试�
 set "TARGET="
 set /p "TARGET=文件: "
 if not defined TARGET goto :menu
-"%~dp0%VENV%" -m mra import %TARGET%
+"%RUN%" -m mra import %TARGET%
 goto :after
 
 :do_digest
-"%~dp0%VENV%" -m mra digest
+"%RUN%" -m mra digest
 goto :after
 
 :do_chat
@@ -220,7 +233,7 @@ echo   直接输入你的问题，中文英文都行。留空回车返回菜单�
 set "MSG="
 set /p "MSG=问题: "
 if not defined MSG goto :menu
-"%~dp0%VENV%" -m mra chat "%MSG%"
+"%RUN%" -m mra chat "%MSG%"
 goto :after
 
 :do_assess
@@ -231,13 +244,13 @@ set /p "DATAF=数据文件: "
 if not defined DATAF goto :menu
 set "NOTE="
 set /p "NOTE=补充说明（例如 n=12/组，可直接回车跳过）: "
-"%~dp0%VENV%" -m mra assess %DATAF% --notes "%NOTE%"
+"%RUN%" -m mra assess %DATAF% --notes "%NOTE%"
 goto :after
 
 :do_status
-"%~dp0%VENV%" -m mra status
+"%RUN%" -m mra status
 echo.
-"%~dp0%VENV%" -m mra usage
+"%RUN%" -m mra usage
 goto :after
 
 :do_refs
@@ -246,18 +259,18 @@ echo   把要检查的文稿（.md / .txt）拖进窗口然后回车。
 set "DOC="
 set /p "DOC=文稿: "
 if not defined DOC goto :menu
-"%~dp0%VENV%" -m mra refs %DOC% --list
+"%RUN%" -m mra refs %DOC% --list
 goto :after
 
 :do_demo
-"%~dp0%VENV%" -m mra demo
-"%~dp0%VENV%" -m mra import demo_corpus.xml
+"%RUN%" -m mra demo
+"%RUN%" -m mra import demo_corpus.xml
 echo.
 echo   导入完成。可以选 3 试着问：这批文献里最大的矛盾是什么
 goto :after
 
 :do_doctor
-"%~dp0%VENV%" -m mra doctor
+"%RUN%" -m mra doctor
 goto :after
 
 :do_open
