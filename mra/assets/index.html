@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>科研中间体 MRA</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1c1b19; --muted: #6b6862;
+    --line: #e2e0da; --accent: #8a5a2b; --accent-soft: #f0e7dd;
+    --warn: #9a5b1f; --ok: #2f6b45; --term-bg: #1c1b19; --term-ink: #e8e4dc;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16150f; --panel: #1e1d16; --ink: #ece8df; --muted: #9a958a;
+      --line: #322f26; --accent: #d8a25f; --accent-soft: #2a2519;
+      --warn: #d8a25f; --ok: #7fb894; --term-bg: #100f0a; --term-ink: #ded9cf;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  header {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { margin: 0; font-size: 17px; letter-spacing: .02em; }
+  header .meta { color: var(--muted); font-size: 12.5px; }
+  header .meta code { background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; }
+  main { display: grid; grid-template-columns: 216px 1fr; min-height: calc(100vh - 53px); }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } nav { border-right: 0 !important; } }
+
+  nav { border-right: 1px solid var(--line); padding: 12px 0; background: var(--panel); }
+  nav .group { padding: 12px 18px 5px; font-size: 11.5px; letter-spacing: .1em;
+               text-transform: uppercase; color: var(--muted); }
+  nav button {
+    display: block; width: 100%; text-align: left; padding: 8px 18px; border: 0;
+    background: none; color: var(--ink); font: inherit; cursor: pointer;
+    border-left: 3px solid transparent;
+  }
+  nav button:hover { background: var(--accent-soft); }
+  nav button[aria-current="true"] { border-left-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  nav button .yen { color: var(--warn); font-size: 11px; margin-left: 5px; }
+
+  section.panel { padding: 22px 26px; max-width: 900px; }
+  h2 { margin: 0 0 4px; font-size: 19px; }
+  p.lede { margin: 0 0 20px; color: var(--muted); font-size: 13.5px; }
+
+  .field { margin-bottom: 15px; }
+  .field label { display: block; font-size: 13px; margin-bottom: 5px; font-weight: 600; }
+  .field .hint { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--bg); color: var(--ink); font: inherit;
+  }
+  textarea { resize: vertical; min-height: 68px; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; margin-bottom: 12px; }
+  .check input { width: auto; }
+
+  button.go {
+    background: var(--accent); color: #fff; border: 0; padding: 9px 20px;
+    border-radius: 7px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.go:disabled { opacity: .5; cursor: default; }
+  button.ghost {
+    background: none; border: 1px solid var(--line); color: var(--ink);
+    padding: 7px 13px; border-radius: 7px; font: inherit; cursor: pointer; font-size: 13px;
+  }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  .files { border: 1px solid var(--line); border-radius: 7px; padding: 6px; background: var(--bg); }
+  .files:empty::after { content: "还没有选文件"; color: var(--muted); font-size: 12.5px; padding: 4px; display: block; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft);
+    border-radius: 5px; padding: 3px 6px 3px 9px; margin: 3px; font-size: 12.5px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+  }
+  .chip button { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; }
+
+  pre.out {
+    background: var(--term-bg); color: var(--term-ink); padding: 14px 16px;
+    border-radius: var(--radius); overflow-x: auto; white-space: pre-wrap;
+    word-break: break-word; font: 12.5px/1.65 ui-monospace, Menlo, Consolas, monospace;
+    margin: 16px 0 0; max-height: 62vh; overflow-y: auto;
+  }
+  pre.out:empty { display: none; }
+  .status { font-size: 13px; margin-top: 10px; }
+  .status.run { color: var(--accent); }
+  .status.ok { color: var(--ok); }
+  .status.bad { color: var(--warn); }
+
+  .chat { display: flex; flex-direction: column; gap: 14px; }
+  .msg { padding: 11px 14px; border-radius: var(--radius); max-width: 88%; white-space: pre-wrap; }
+  .msg.me { background: var(--accent-soft); align-self: flex-end; }
+  .msg.it { background: var(--panel); border: 1px solid var(--line); align-self: flex-start; }
+  .msg.it code, .msg.me code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .92em; }
+
+  dialog {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 0;
+    background: var(--panel); color: var(--ink); width: min(620px, 92vw);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  .picker-head { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .picker-head .where { font-family: ui-monospace, Menlo, Consolas, monospace;
+                        font-size: 12px; color: var(--muted); word-break: break-all; }
+  .picker-list { max-height: 46vh; overflow-y: auto; }
+  .picker-list button {
+    display: block; width: 100%; text-align: left; padding: 7px 18px; border: 0;
+    background: none; color: var(--ink); font: inherit; cursor: pointer; font-size: 13.5px;
+  }
+  .picker-list button:hover { background: var(--accent-soft); }
+  .picker-foot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; }
+  .warn-note { background: var(--accent-soft); border-left: 3px solid var(--warn);
+               padding: 9px 13px; border-radius: 5px; font-size: 13px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>科研中间体 · MRA</h1>
+  <span class="meta">数据目录 <code id="ws">…</code></span>
+  <span class="meta">模型 <code id="model">…</code></span>
+</header>
+
+<main>
+  <nav id="nav"></nav>
+  <section class="panel" id="panel"></section>
+</main>
+
+<dialog id="picker">
+  <div class="picker-head">
+    <strong id="picker-title">选择文件</strong>
+    <div class="where" id="picker-where"></div>
+  </div>
+  <div class="picker-list" id="picker-list"></div>
+  <div class="picker-foot">
+    <button class="ghost" id="picker-up">上一层</button>
+    <button class="ghost" id="picker-here">选中当前文件夹</button>
+    <button class="ghost" id="picker-close">取消</button>
+  </div>
+</dialog>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+let STATE = {};
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { "Content-Type": "application/json", "X-MRA-Token": TOKEN, ...(options.headers || {}) },
+  });
+  const data = await response.json().catch(() => ({ error: "服务端没有回应" }));
+  if (!response.ok) throw new Error(data.error || "出错了");
+  return data;
+}
+
+// ------------------------------------------------------------------ 任务定义
+
+const TASKS = [
+  { group: "文献库", items: [
+    { id: "import", name: "导入文献", lede: "PDF、PubMed 导出的 XML、或纯文本。XML 不花钱。",
+      cmd: "import", fields: [
+        { key: "files", type: "files", label: "文件", hint: "可以一次选多个。PubMed 网页版：Send to → File → Format: XML。" },
+        { key: "topic", type: "text", label: "主题标签", hint: "可留空，用来标记这批文献属于哪个课题。" },
+        { key: "no_metadata", type: "check", label: "跳过元数据抽取（完全离线，标题只能用文件名）" },
+      ] },
+    { id: "digest", name: "提炼文献", lede: "逐篇结构化提炼。每篇一次调用，是花钱最多的一步。",
+      cmd: "digest", fields: [
+        { key: "limit", type: "number", label: "只处理前几篇", hint: "留空表示全部。第一次建议先填 3 试试。" },
+        { key: "max_cost", type: "number", step: "0.5", label: "花费上限（美元）", value: "2",
+          hint: "到了就干净停下，已提炼的保留，下次接着来。" },
+      ] },
+    { id: "search", name: "检索 PubMed", lede: "模型先规划检索式，再抓取入库。校园网挡了 NCBI 就改用「导入文献」。",
+      cmd: "search", fields: [
+        { key: "topic", type: "text", label: "主题或临床问题", required: true },
+        { key: "max", type: "number", label: "最多抓几篇", value: "50" },
+      ] },
+    { id: "status", name: "查看状态", lede: "文献数、假说版本、花费。不花钱。", cmd: "status", fields: [] },
+  ]},
+  { group: "想清楚", items: [
+    { id: "chat", name: "科学对话", lede: "每一轮都先检索你自己的文献库，再回答。中文提问也能命中英文语料。", chat: true },
+    { id: "assess", name: "评估数据", lede: "五维打分。不指定期刊时，会排序推荐候选刊。",
+      cmd: "assess", fields: [
+        { key: "data", type: "files", label: "数据文件", hint: "csv / tsv / txt / md。实验记录也一起选上，模型需要背景。", required: true },
+        { key: "notes", type: "area", label: "补充说明", hint: "文件里没写的信息，例如「n=12/组，两批独立队列」。" },
+        { key: "journal", type: "text", label: "目标期刊", hint: "留空 = 让它推荐。填了 = 对着这本刊的门槛评。" },
+      ] },
+    { id: "figures", name: "规划图表", lede: "不画图 —— 想清楚每张图在论证什么、用什么图形式、图注能不能撑住。",
+      cmd: "figures", fields: [
+        { key: "data", type: "files", label: "数据文件", required: true },
+        { key: "notes", type: "area", label: "补充说明" },
+        { key: "journal", type: "text", label: "目标期刊", hint: "有风格档案时会照它的图表惯例来。" },
+      ] },
+    { id: "hypothesis", name: "冻结假说", lede: "把当前对话固化成一个可版本比较的假说。",
+      cmd: "hypothesis", fields: [{ key: "note", type: "text", label: "版本说明", hint: "例如「加入 Kupffer 反证后」。" }] },
+  ]},
+  { group: "写出来", items: [
+    { id: "proposal", name: "生成 Proposal", lede: "从最新假说成文。",
+      cmd: "proposal", fields: [{ key: "references", type: "check", label: "附参考文献列表", checked: true }] },
+    { id: "review", name: "写综述", lede: "先出大纲（便宜），确认结构后再逐节写。",
+      cmd: "review", fields: [
+        { key: "topic", type: "text", label: "综述主题", required: true },
+        { key: "outline_only", type: "check", label: "只出大纲（强烈建议先跑这个）", checked: true },
+        { key: "references", type: "check", label: "附参考文献列表" },
+        { key: "yes", type: "check", label: "跳过花费确认", checked: true },
+      ] },
+    { id: "journal_add", name: "学期刊风格", lede: "读该刊的论文，提炼成可计数的写作规则。",
+      cmd: "journal_add", fields: [
+        { key: "name", type: "text", label: "期刊名", hint: '例如 Hepatology', required: true },
+        { key: "samples", type: "dir", label: "全文样本目录", hint: "放 3–5 篇和你工作最接近的该刊论文，PDF 直接读。" },
+      ] },
+    { id: "refs", name: "引用核对", lede: "逐条核对文稿里的引用是否真在库里。不花钱。",
+      cmd: "refs", fields: [
+        { key: "file", type: "file", label: "文稿", required: true },
+        { key: "list", type: "check", label: "同时输出参考文献列表", checked: true },
+      ] },
+    { id: "lint", name: "AI 痕迹检查", lede: "确定性的静态检查，不调用模型。不花钱。",
+      cmd: "lint", fields: [{ key: "file", type: "file", label: "文稿", required: true }] },
+    { id: "finalize", name: "定稿", lede: "一步产出 v1、母语化去 AI 化的 v2、以及一份对比报告。",
+      cmd: "finalize", fields: [
+        { key: "file", type: "file", label: "文稿", required: true },
+        { key: "journal", type: "text", label: "目标期刊", required: true },
+      ] },
+  ]},
+  { group: "工具", items: [
+    { id: "demo", name: "试用示例", lede: "把自带的示例语料和数据复制到数据目录，然后导入。不花钱。", demo: true },
+    { id: "doctor", name: "连接自检", lede: "两次极小的调用，验证 key、网络、以及结构化输出能不能用。", cmd: "doctor", fields: [] },
+    { id: "usage", name: "花费明细", lede: "不花钱。", cmd: "usage", fields: [] },
+    { id: "guide", name: "流程速查", lede: "不花钱。", cmd: "guide", fields: [] },
+  ]},
+];
+
+const byId = {};
+TASKS.forEach(g => g.items.forEach(t => byId[t.id] = t));
+
+// ---------------------------------------------------------------------- 侧栏
+
+function renderNav(active) {
+  const nav = document.getElementById("nav");
+  nav.innerHTML = "";
+  for (const group of TASKS) {
+    const heading = document.createElement("div");
+    heading.className = "group";
+    heading.textContent = group.group;
+    nav.append(heading);
+    for (const task of group.items) {
+      const button = document.createElement("button");
+      button.textContent = task.name;
+      if ((STATE.costly || []).includes(task.cmd || task.id)) {
+        const mark = document.createElement("span");
+        mark.className = "yen";
+        mark.textContent = "$";
+        mark.title = "这一步会调用模型，产生费用";
+        button.append(mark);
+      }
+      if (task.id === active) button.setAttribute("aria-current", "true");
+      button.onclick = () => show(task.id);
+      nav.append(button);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------- 表单
+
+function fieldNode(field, store) {
+  const wrap = document.createElement("div");
+
+  if (field.type === "check") {
+    wrap.className = "check";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.id = "f_" + field.key;
+    input.checked = !!field.checked;
+    store[field.key] = () => input.checked;
+    const label = document.createElement("label");
+    label.htmlFor = input.id;
+    label.textContent = field.label;
+    label.style.fontWeight = "400";
+    label.style.marginBottom = "0";
+    wrap.append(input, label);
+    return wrap;
+  }
+
+  wrap.className = "field";
+  const label = document.createElement("label");
+  label.textContent = field.label + (field.required ? " *" : "");
+  wrap.append(label);
+
+  if (field.type === "files" || field.type === "file" || field.type === "dir") {
+    const chosen = [];
+    const box = document.createElement("div");
+    box.className = "files";
+    const redraw = () => {
+      box.innerHTML = "";
+      chosen.forEach((path, index) => {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.append(document.createTextNode(path.split(/[\\/]/).pop() || path));
+        const remove = document.createElement("button");
+        remove.textContent = "×";
+        remove.title = path;
+        remove.onclick = () => { chosen.splice(index, 1); redraw(); };
+        chip.append(remove);
+        box.append(chip);
+      });
+    };
+    redraw();
+    const pick = document.createElement("button");
+    pick.className = "ghost";
+    pick.textContent = field.type === "dir" ? "选择文件夹…" : "选择文件…";
+    pick.onclick = async () => {
+      const path = await openPicker(field.type === "dir");
+      if (!path) return;
+      if (field.type === "files") chosen.push(path); else chosen.splice(0, chosen.length, path);
+      redraw();
+    };
+    wrap.append(box, document.createElement("div"), pick);
+    store[field.key] = () =>
+      field.type === "files" ? chosen.slice() : (chosen[0] || "");
+  } else {
+    const input = document.createElement(field.type === "area" ? "textarea" : "input");
+    if (field.type !== "area") input.type = field.type === "number" ? "number" : "text";
+    if (field.step) input.step = field.step;
+    if (field.value) input.value = field.value;
+    wrap.append(input);
+    store[field.key] = () => {
+      const raw = input.value.trim();
+      if (!raw) return "";
+      return field.type === "number" ? Number(raw) : raw;
+    };
+  }
+
+  if (field.hint) {
+    const hint = document.createElement("div");
+    hint.className = "hint";
+    hint.textContent = field.hint;
+    wrap.append(hint);
+  }
+  return wrap;
+}
+
+// ------------------------------------------------------------------ 跑与输出
+
+function runner(panel) {
+  const output = document.createElement("pre");
+  output.className = "out";
+  const status = document.createElement("div");
+  status.className = "status";
+  panel.append(status, output);
+
+  return async function run(command, args, { onLine, onDone } = {}) {
+    output.textContent = "";
+    status.className = "status run";
+    status.textContent = "正在运行…";
+    let job;
+    try {
+      job = await api("/api/run", { method: "POST", body: JSON.stringify({ command, args }) });
+    } catch (error) {
+      status.className = "status bad";
+      status.textContent = error.message;
+      return;
+    }
+
+    const source = new EventSource(`/api/stream?job=${encodeURIComponent(job.job)}&t=${encodeURIComponent(TOKEN)}`);
+    source.addEventListener("line", event => {
+      const text = JSON.parse(event.data).text;
+      if (onLine) onLine(text);
+      output.textContent += text + "\n";
+      output.scrollTop = output.scrollHeight;
+    });
+    source.addEventListener("done", event => {
+      const code = JSON.parse(event.data).code;
+      source.close();
+      status.className = "status " + (code === 0 ? "ok" : "bad");
+      status.textContent = code === 0 ? "完成。"
+        : code === 2 ? "已到达设定的上限，干净停下了。"
+        : `出错了（退出码 ${code}）。上面最后几行是原因。`;
+      if (onDone) onDone(code);
+    });
+    source.onerror = () => {
+      source.close();
+      status.className = "status bad";
+      status.textContent = "连接断了。这个窗口关掉再从终端里的网址重开。";
+    };
+  };
+}
+
+// ---------------------------------------------------------------------- 视图
+
+function show(id) {
+  const task = byId[id];
+  renderNav(id);
+  const panel = document.getElementById("panel");
+  panel.innerHTML = "";
+
+  const heading = document.createElement("h2");
+  heading.textContent = task.name;
+  const lede = document.createElement("p");
+  lede.className = "lede";
+  lede.textContent = task.lede;
+  panel.append(heading, lede);
+
+  if (task.chat) return renderChat(panel);
+  if (task.demo) return renderDemo(panel);
+
+  const store = {};
+  for (const field of task.fields) panel.append(fieldNode(field, store));
+
+  const go = document.createElement("button");
+  go.className = "go";
+  go.textContent = "开始";
+  const row = document.createElement("div");
+  row.className = "row";
+  row.append(go);
+  panel.append(row);
+
+  const run = runner(panel);
+  go.onclick = () => {
+    const args = {};
+    for (const [key, read] of Object.entries(store)) {
+      const value = read();
+      if (value !== "" && value !== false && !(Array.isArray(value) && !value.length)) args[key] = value;
+    }
+    for (const field of task.fields) {
+      if (field.required && !(field.key in args)) {
+        alert(`还没填：${field.label}`);
+        return;
+      }
+    }
+    go.disabled = true;
+    run(task.cmd, args, { onDone: () => { go.disabled = false; } });
+  };
+}
+
+function renderChat(panel) {
+  const note = document.createElement("div");
+  note.className = "warn-note";
+  note.textContent = "它不会替你下结论。默认追问的是：因果链里哪一步是假设而非实证、还有什么能产生同样的观察、什么结果能证伪。";
+  const log = document.createElement("div");
+  log.className = "chat";
+  const box = document.createElement("textarea");
+  box.placeholder = "问点什么…（Ctrl+Enter 发送）";
+  const send = document.createElement("button");
+  send.className = "go";
+  send.textContent = "发送";
+  const reset = document.createElement("button");
+  reset.className = "ghost";
+  reset.textContent = "清空对话";
+  const row = document.createElement("div");
+  row.className = "row";
+  row.append(send, reset);
+  panel.append(note, log, document.createElement("hr"), box, row);
+
+  const status = document.createElement("div");
+  status.className = "status";
+  panel.append(status);
+
+  function bubble(kind, text) {
+    const node = document.createElement("div");
+    node.className = "msg " + kind;
+    node.textContent = text;
+    log.append(node);
+    node.scrollIntoView({ block: "nearest" });
+    return node;
+  }
+
+  async function ask(message) {
+    bubble("me", message);
+    const reply = bubble("it", "…");
+    status.className = "status run";
+    status.textContent = "正在检索文献库并思考…";
+    send.disabled = true;
+    let collected = "";
+    const job = await api("/api/run", {
+      method: "POST",
+      body: JSON.stringify({ command: "chat", args: { message } }),
+    }).catch(error => { reply.textContent = error.message; return null; });
+    if (!job) { send.disabled = false; return; }
+
+    const source = new EventSource(`/api/stream?job=${encodeURIComponent(job.job)}&t=${encodeURIComponent(TOKEN)}`);
+    source.addEventListener("line", event => {
+      collected += JSON.parse(event.data).text + "\n";
+      reply.textContent = collected.trim();
+    });
+    source.addEventListener("done", event => {
+      source.close();
+      send.disabled = false;
+      const code = JSON.parse(event.data).code;
+      status.className = "status " + (code === 0 ? "ok" : "bad");
+      status.textContent = code === 0 ? "" : "出错了，上面是原因。";
+      if (!collected.trim()) reply.textContent = "（没有输出）";
+    });
+  }
+
+  send.onclick = () => {
+    const message = box.value.trim();
+    if (!message) return;
+    box.value = "";
+    ask(message);
+  };
+  box.onkeydown = event => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) send.click();
+  };
+  reset.onclick = async () => {
+    const job = await api("/api/run", { method: "POST", body: JSON.stringify({ command: "chat", args: { reset: true } }) });
+    log.innerHTML = "";
+    status.textContent = "对话已清空。";
+  };
+}
+
+function renderDemo(panel) {
+  const steps = document.createElement("p");
+  steps.className = "lede";
+  steps.textContent = "两步：先把示例文件放到数据目录，再导入。两步都不花钱。导入完可以去「科学对话」问：这批文献里最大的矛盾是什么。";
+  panel.append(steps);
+
+  const go = document.createElement("button");
+  go.className = "go";
+  go.textContent = "复制示例并导入";
+  panel.append(go);
+  const run = runner(panel);
+
+  go.onclick = () => {
+    go.disabled = true;
+    run("demo", {}, {
+      onDone: code => {
+        if (code !== 0) { go.disabled = false; return; }
+        run("import", { files: ["demo_corpus.xml"] }, { onDone: () => { go.disabled = false; } });
+      },
+    });
+  };
+}
+
+// -------------------------------------------------------------------- 选文件
+
+let pickerResolve = null;
+let pickerDir = "";
+
+async function openPicker(wantDirectory) {
+  const dialog = document.getElementById("picker");
+  document.getElementById("picker-title").textContent = wantDirectory ? "选择文件夹" : "选择文件";
+  document.getElementById("picker-here").style.display = wantDirectory ? "" : "none";
+  await loadDir(pickerDir || STATE.home);
+  dialog.showModal();
+  return new Promise(resolve => { pickerResolve = resolve; });
+}
+
+async function loadDir(path) {
+  const data = await api("/api/browse?path=" + encodeURIComponent(path) + "&t=" + encodeURIComponent(TOKEN));
+  pickerDir = data.path;
+  document.getElementById("picker-where").textContent = data.path;
+  const list = document.getElementById("picker-list");
+  list.innerHTML = "";
+  for (const entry of data.entries) {
+    const button = document.createElement("button");
+    button.textContent = (entry.dir ? "📁  " : "📄  ") + entry.name;
+    button.onclick = () => entry.dir ? loadDir(entry.path) : finishPicker(entry.path);
+    list.append(button);
+  }
+  if (!data.entries.length) {
+    const empty = document.createElement("div");
+    empty.style.cssText = "padding:14px 18px;color:var(--muted);font-size:13px";
+    empty.textContent = data.error || "这个文件夹是空的";
+    list.append(empty);
+  }
+  document.getElementById("picker-up").onclick = () => data.parent && loadDir(data.parent);
+}
+
+function finishPicker(path) {
+  document.getElementById("picker").close();
+  if (pickerResolve) pickerResolve(path);
+  pickerResolve = null;
+}
+
+document.getElementById("picker-here").onclick = () => finishPicker(pickerDir);
+document.getElementById("picker-close").onclick = () => finishPicker(null);
+document.getElementById("picker").addEventListener("cancel", () => finishPicker(null));
+
+// ----------------------------------------------------------------------- 启动
+
+(async function start() {
+  if (!TOKEN) {
+    document.getElementById("panel").innerHTML =
+      "<h2>网址不完整</h2><p class='lede'>请用启动时终端里打印的那个带 <code>?t=…</code> 的完整网址打开。" +
+      "那个 token 是为了防止你浏览器里别的网页在后台驱动这个工具。</p>";
+    return;
+  }
+  try {
+    STATE = await api("/api/state?t=" + encodeURIComponent(TOKEN));
+  } catch (error) {
+    document.getElementById("panel").innerHTML = "<h2>连不上</h2><p class='lede'>" + error.message + "</p>";
+    return;
+  }
+  document.getElementById("ws").textContent = STATE.workspace;
+  document.getElementById("model").textContent = STATE.model + "（" + STATE.provider + "）";
+  show("status");
+})();
+</script>
+</body>
+</html>

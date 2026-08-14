@@ -100,11 +100,11 @@ def test_menu_digits_all_dispatch(lines: list[str]):
     """Every number the menu offers has to go somewhere."""
     offered = set()
     for line in lines:
-        match = re.match(r"^echo\s+(\d)\s+\S", line.strip())
+        match = re.match(r"^echo\s+(\d+)\s+\S", line.strip())
         if match:
             offered.add(match.group(1))
 
-    dispatched = set(re.findall(r'if\s+"%CHOICE%"=="(\d)"', "\r\n".join(lines)))
+    dispatched = set(re.findall(r'if\s+"%CHOICE%"=="(\d+)"', "\r\n".join(lines)))
 
     assert offered, "no menu items parsed — did the menu format change?"
     assert offered <= dispatched, f"menu items with no handler: {sorted(offered - dispatched)}"

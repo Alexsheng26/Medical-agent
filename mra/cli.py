@@ -868,6 +868,17 @@ def cmd_memory(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_web(args, cfg: Config) -> int:
+    """Serve the browser interface.
+
+    Imported inside the function rather than at module load: it pulls in an HTTP
+    server and opens a socket, and every other command would pay that on start.
+    """
+    from . import webui
+
+    return webui.serve(cfg, port=args.port, open_browser=not args.no_open)
+
+
 def cmd_usage(args, cfg: Config) -> int:
     """Token and cost accounting. No API call."""
     ledger = Ledger.load(cfg.usage_path, cfg.model, cfg.prices)
@@ -928,6 +939,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     add("doctor", cmd_doctor, "Check the model connection actually works")
     add("status", cmd_status, "Show what is in the workspace")
+
+    p = add("web", cmd_web, "Open the browser interface (this machine only)")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--no-open", action="store_true", help="Do not launch a browser")
 
     p = add("search", cmd_search, "Search PubMed and store results")
     p.add_argument("topic", help="Clinical question or topic")

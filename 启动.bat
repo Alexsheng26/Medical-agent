@@ -187,32 +187,44 @@ echo ============================================================
 echo   数据目录: %WORK%
 echo ============================================================
 echo.
-echo    1  导入文献      PDF / PubMed XML / 纯文本
-echo    2  提炼文献      逐篇结构化提炼（每篇一次调用）
-echo    3  科学对话      基于你的文献库追问
-echo    4  评估数据      打分 + 推荐候选期刊
-echo    5  查看状态      文献数、假说、花费
-echo    6  引用核对      检查文稿里的引用是否真实（不花钱）
-echo    7  试用示例      导入仓库自带的 8 篇示例文献
-echo    8  打开数据目录
+echo    1  网页界面      推荐 —— 在浏览器里操作，不用记命令
+echo.
+echo    2  导入文献      PDF / PubMed XML / 纯文本
+echo    3  提炼文献      逐篇结构化提炼（每篇一次调用）
+echo    4  科学对话      基于你的文献库追问
+echo    5  评估数据      打分 + 推荐候选期刊
+echo    6  查看状态      文献数、假说、花费
+echo    7  引用核对      检查文稿里的引用是否真实（不花钱）
+echo    8  试用示例      导入仓库自带的 8 篇示例文献
 echo    9  连接自检      模型连不通时先跑这个
+echo   10  打开数据目录
 echo    0  退出
 echo.
 set "CHOICE="
 set /p "CHOICE=请输入数字后回车: "
 
-if "%CHOICE%"=="1" goto :do_import
-if "%CHOICE%"=="2" goto :do_digest
-if "%CHOICE%"=="3" goto :do_chat
-if "%CHOICE%"=="4" goto :do_assess
-if "%CHOICE%"=="5" goto :do_status
-if "%CHOICE%"=="6" goto :do_refs
-if "%CHOICE%"=="7" goto :do_demo
-if "%CHOICE%"=="8" goto :do_open
+if "%CHOICE%"=="1" goto :do_web
+if "%CHOICE%"=="2" goto :do_import
+if "%CHOICE%"=="3" goto :do_digest
+if "%CHOICE%"=="4" goto :do_chat
+if "%CHOICE%"=="5" goto :do_assess
+if "%CHOICE%"=="6" goto :do_status
+if "%CHOICE%"=="7" goto :do_refs
+if "%CHOICE%"=="8" goto :do_demo
 if "%CHOICE%"=="9" goto :do_doctor
+if "%CHOICE%"=="10" goto :do_open
 if "%CHOICE%"=="0" goto :done
 echo   没有这个选项，请重新选。
 goto :menu
+
+:do_web
+echo.
+echo   正在启动网页界面，浏览器会自动打开。
+echo   界面只在这台电脑上，别人访问不到。
+echo   要停下来回到这个菜单，在本窗口按 Ctrl-C。
+echo.
+"%RUN%" -m mra web
+goto :after
 
 :do_import
 echo.

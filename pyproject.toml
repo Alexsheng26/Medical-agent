@@ -26,7 +26,8 @@ include = ["mra*"]
 [tool.setuptools.package-data]
 # examples ship with the package: without them `mra demo` and every "try it
 # first" instruction only work for someone who cloned the repository.
-mra = ["prompts/*.md", "examples/*"]
+# assets/ holds the web interface, read through importlib.resources.
+mra = ["prompts/*.md", "examples/*", "assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
