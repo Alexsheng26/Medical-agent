@@ -21,3 +21,9 @@ venv/
 # Launcher-created: a private interpreter and the researcher own data.
 .venv/
 workspace/
+
+# Build artifacts. `python -m build` writes a second copy of the whole package
+# into build/lib/, which once got committed — someone downloading the ZIP then
+# finds two copies of every module and no way to tell which one runs.
+build/
+dist/

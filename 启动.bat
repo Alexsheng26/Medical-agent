@@ -96,19 +96,62 @@ REM parenthesised block cmd expands %NEWKEY% while parsing, i.e. before `set /p`
 REM has run, so the key would always be saved empty.
 
 if defined ANTHROPIC_API_KEY goto :havekey
+if defined MRA_API_KEY goto :havekey
 echo.
-echo   还没有设置 API key。
+echo   还没有设置 API key。先选一个模型服务：
+echo.
+echo     1  Claude      判断质量最好，按量计费
+echo     2  DeepSeek    便宜很多，全部命令都实测跑通过
+echo     0  先跳过      只剩 5 查状态 / 6 引用核对 / 7 试用示例 这几条不花钱的能用
+echo.
+set "PICK="
+set /p "PICK=请输入数字后回车: "
+if "%PICK%"=="1" goto :key_claude
+if "%PICK%"=="2" goto :key_deepseek
+goto :havekey
+
+:key_claude
+echo.
 echo   到 https://platform.claude.com 的 Settings -^> API Keys 建一个，
-echo   然后在下面粘贴（在窗口里点右键就是粘贴）。直接回车可跳过，
-echo   但除了 lint / refs / status 之外的命令都会用不了。
-echo.
+echo   然后在下面粘贴（在窗口里点右键就是粘贴）。
+start "" "https://platform.claude.com/settings/keys"
 set "NEWKEY="
-set /p "NEWKEY=API key: "
+set /p "NEWKEY=API key (sk-ant-...): "
 if not defined NEWKEY goto :havekey
 setx ANTHROPIC_API_KEY "%NEWKEY%" >nul
 set "ANTHROPIC_API_KEY=%NEWKEY%"
 echo   [OK] 已保存，以后不用再输
+goto :havekey
+
+:key_deepseek
+echo.
+echo   到 https://platform.deepseek.com 的 API keys 建一个，
+echo   然后在下面粘贴（在窗口里点右键就是粘贴）。
+start "" "https://platform.deepseek.com/api_keys"
+set "NEWKEY="
+set /p "NEWKEY=API key (sk-...): "
+if not defined NEWKEY goto :havekey
+setx MRA_PROVIDER "openai" >nul
+setx MRA_BASE_URL "https://api.deepseek.com" >nul
+setx MRA_MODEL "deepseek-chat" >nul
+setx MRA_API_KEY "%NEWKEY%" >nul
+set "MRA_PROVIDER=openai"
+set "MRA_BASE_URL=https://api.deepseek.com"
+set "MRA_MODEL=deepseek-chat"
+set "MRA_API_KEY=%NEWKEY%"
+echo   [OK] 已保存，以后不用再输
 :havekey
+
+REM DeepSeek 走的是 OpenAI 兼容接口，要多装一个包。检查放在分支外面，
+REM 因为用户也可能是自己设好环境变量来的，没走上面那个菜单。
+
+if /i not "%MRA_PROVIDER%"=="openai" goto :ready
+"%VENV%" -c "import openai" >nul 2>&1
+if not errorlevel 1 goto :ready
+echo   [..] 正在安装 DeepSeek 需要的组件（约 20 秒）
+"%VENV%" -m pip install --disable-pip-version-check -q openai
+if errorlevel 1 echo   [X] 装不上。菜单里选 9 连接自检，能看到具体原因。
+:ready
 
 REM -------------------------------------------------------------- 工作目录
 REM The knowledge base lives beside this file rather than inside it, so the

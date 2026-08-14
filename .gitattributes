@@ -1,2 +1,9 @@
-# Batch files must be CRLF: cmd.exe misparses labels and goto in LF-only files.
-*.bat text eol=crlf
+# Batch files must be CRLF: cmd.exe misparses labels and goto in LF-only files,
+# and this launcher is built almost entirely out of labels and goto.
+#
+# `-text` rather than `text eol=crlf` on purpose. `eol=crlf` stores the blob as
+# LF and converts on *checkout* — which never happens for someone who clicks
+# Code -> Download ZIP, the path most Windows users take. `-text` stores the
+# bytes verbatim, so CRLF survives clone, ZIP download, and raw download alike.
+# Cost: git diffs the file as binary. Worth it; tests/test_launcher.py guards it.
+*.bat -text

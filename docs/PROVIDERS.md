@@ -1,5 +1,9 @@
 # 换用别的模型（DeepSeek 等）
 
+> **Windows 上双击 `启动.bat` 的人不用读这篇。** 启动器第一次运行就会问你用 Claude
+> 还是 DeepSeek，选完把下面这些环境变量和依赖都装好配好。这篇是给 macOS / Linux，
+> 或者想指向 DeepSeek 以外的兼容端点的人。
+
 默认走 Anthropic。也可以指向任何 **OpenAI 兼容**的端点——DeepSeek 是主要动机，
 但同一条路对其他兼容服务一样有效。
 

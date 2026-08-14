@@ -11,7 +11,10 @@
 | 东西 | 在哪拿 | 花钱吗 |
 |---|---|---|
 | **Python ≥ 3.10** | https://www.python.org/downloads/ | 免费 |
-| **Anthropic API key** | https://platform.claude.com → Settings → API Keys | 按用量计费 |
+| **一个 API key** | Claude：https://platform.claude.com → Settings → API Keys<br>DeepSeek：https://platform.deepseek.com → API keys | 按用量计费 |
+
+两家二选一即可。**Claude 判断质量更好，DeepSeek 便宜很多**，全部命令都在 DeepSeek 上
+实测跑通过。Windows 用启动器的话，它会直接问你选哪个，不用自己配环境变量。
 
 关于费用：**这不是订阅制**，是按调用量算的。以下是实测值（Opus 5，effort=high）：
 
@@ -41,9 +44,12 @@
 1. 检查 Python 装没装 —— **包括识别出那个「假 python」**（见下一节），没装就直接
    告诉你去哪下、要勾哪个框，而不是甩一串看不懂的报错
 2. 建一个独立运行环境并装好依赖（只有第一次需要，约 3 分钟）
-3. 问你要 API key，存好，**并且在当前窗口立即生效** —— `setx` 对当前窗口不生效，
-   这是最常见的"明明设了却用不了"
-4. 给一个中文数字菜单：导入文献 / 提炼 / 对话 / 评估数据 / 查状态 / 引用核对
+3. 问你用 **Claude 还是 DeepSeek**，然后要一次 key，存好，**并且在当前窗口立即生效**
+   —— `setx` 对当前窗口不生效，这是最常见的"明明设了却用不了"。选 DeepSeek 的话，
+   那四个环境变量和多出来的那个依赖都由它配好装好，不用照着
+   [PROVIDERS.md](PROVIDERS.md) 手配
+4. 给一个中文数字菜单：导入文献 / 提炼 / 对话 / 评估数据 / 查状态 / 引用核对 /
+   试用示例 / 打开数据目录 / 连接自检
 
 数据存在 `启动.bat` 旁边的 `workspace\` 文件夹里，和代码分开。
 
