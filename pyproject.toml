@@ -10,6 +10,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+# Optional: lets tests/test_webui.py drive the page in a real browser. Without
+# it those six tests skip and the rest still run.
+browser = ["playwright>=1.40"]
 # For pointing the tool at an OpenAI-compatible endpoint (DeepSeek and friends).
 openai = ["openai>=1.40"]
 

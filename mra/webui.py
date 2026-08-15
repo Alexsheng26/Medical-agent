@@ -431,6 +431,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, read_index(), "text/html; charset=utf-8")
             return
 
+        if url.path == "/favicon.ico":
+            # Browsers request this on their own. Answering 403 puts a red line
+            # in the console that reads like a real failure.
+            self._send(204, b"", "image/x-icon")
+            return
+
         if not self._authorised(query):
             self._json({"error": "token 不对。请用启动时打印的那个网址打开。"}, 403)
             return
@@ -475,6 +481,9 @@ class Handler(BaseHTTPRequestHandler):
             "workspace": str(self.cfg.workspace),
             "provider": self.cfg.provider or "anthropic",
             "model": self.cfg.model,
+            # Where the file picker opens. The project folder holds the data
+            # and the drafts; home is a longer walk from anything relevant.
+            "start_dir": str(self.cfg.workspace.parent),
             "home": str(Path.home()),
             "costly": sorted(COSTLY),
         }

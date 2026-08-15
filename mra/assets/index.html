@@ -544,7 +544,7 @@ async function openPicker(wantDirectory) {
   const dialog = document.getElementById("picker");
   document.getElementById("picker-title").textContent = wantDirectory ? "选择文件夹" : "选择文件";
   document.getElementById("picker-here").style.display = wantDirectory ? "" : "none";
-  await loadDir(pickerDir || STATE.home);
+  await loadDir(pickerDir || STATE.start_dir || STATE.home);
   dialog.showModal();
   return new Promise(resolve => { pickerResolve = resolve; });
 }

@@ -212,3 +212,76 @@ class TestServer:
         with pytest.raises(urllib.error.HTTPError) as caught:
             opener.open(request, timeout=10)
         assert caught.value.code == 400
+
+
+# --------------------------------------------------------------- in a browser
+
+# The page is the one part of this project that only a browser can check: a
+# typo'd element id or a stale function name is valid Python, valid HTML, and a
+# blank screen. These run when Playwright and a Chromium build are present and
+# skip otherwise, so nobody installing the tool needs either.
+
+def _chromium() -> str:
+    from pathlib import Path
+
+    for candidate in sorted(Path("/opt/pw-browsers").glob("chromium-*/chrome-linux/chrome")):
+        return str(candidate)
+    pytest.skip("no chromium build available")
+
+
+@pytest.fixture(scope="module")
+def page(server):
+    # Skipped inside the fixture, not at import: a module-level importorskip
+    # would take the other thirty tests down with it on a machine that has no
+    # browser, which is every machine this tool actually gets installed on.
+    playwright_api = pytest.importorskip(
+        "playwright.sync_api", reason="playwright not installed"
+    )
+    with playwright_api.sync_playwright() as engine:
+        browser = engine.chromium.launch(executable_path=_chromium())
+        tab = browser.new_page()
+        failures: list[str] = []
+        tab.on("pageerror", lambda error: failures.append(str(error)))
+        tab.goto(server + "/?t=test-token", wait_until="networkidle")
+        tab.wait_for_timeout(600)
+        tab.failures = failures
+        yield tab
+        browser.close()
+
+
+class TestInBrowser:
+    def test_the_page_loads_without_a_script_error(self, page):
+        assert page.failures == []
+        assert page.title() == "科研中间体 MRA"
+
+    def test_the_sidebar_lists_every_task(self, page):
+        assert page.locator("nav button").count() >= 15
+
+    def test_the_header_shows_where_the_data_lives(self, page):
+        assert page.inner_text("#ws").endswith(".mra")
+
+    def test_switching_task_swaps_the_panel(self, page):
+        page.get_by_role("button", name="评估数据").click()
+        page.wait_for_timeout(250)
+        assert page.inner_text("#panel h2") == "评估数据"
+        assert page.failures == []
+
+    def test_a_command_runs_from_the_page_and_reports_completion(self, page):
+        page.get_by_role("button", name="流程速查").click()
+        page.wait_for_timeout(250)
+        page.get_by_role("button", name="开始").click()
+        page.wait_for_selector("pre.out:not(:empty)", timeout=20_000)
+        page.wait_for_timeout(1500)
+        assert "科研中间体" in page.inner_text("pre.out")
+        assert page.inner_text(".status") == "完成。"
+        assert page.failures == []
+
+    def test_the_file_picker_opens_and_lists(self, page, tmp_path_factory):
+        page.get_by_role("button", name="引用核对").click()
+        page.wait_for_timeout(250)
+        page.get_by_role("button", name="选择文件…").click()
+        page.wait_for_timeout(600)
+        assert page.locator("#picker").is_visible()
+        assert page.inner_text("#picker-where")
+        page.locator("#picker-close").click()
+        assert page.failures == []
