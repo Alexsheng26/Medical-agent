@@ -478,7 +478,10 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------ pieces
 
     def _state(self) -> dict[str, Any]:
+        from . import __version__
+
         return {
+            "version": __version__,
             "workspace": str(self.cfg.workspace),
             "provider": self.cfg.provider or "anthropic",
             "model": self.cfg.model,

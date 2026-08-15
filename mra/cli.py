@@ -313,6 +313,9 @@ def cmd_doctor(args, cfg: Config) -> int:
 def cmd_status(args, cfg: Config) -> int:
     with _store(cfg) as store:
         latest = store.latest_hypothesis()
+        from . import __version__
+
+        print(f"Version       mra {__version__}")
         print(f"Workspace     {cfg.workspace}")
         print(f"Model         {cfg.model} (effort={cfg.effort})")
         print(f"Articles      {store.count_articles()}")

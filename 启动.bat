@@ -99,6 +99,8 @@ goto :halt
 :deps_ok
 
 echo   [OK] 运行环境已就绪
+for /f "delims=" %%v in ('"%RUN%" -c "import mra;print(mra.__version__)" 2^>nul') do set "MRAVER=%%v"
+if defined MRAVER echo   [OK] 版本 mra %MRAVER%
 
 REM -------------------------------------------------------------------- key
 REM setx writes permanently but does NOT affect the window it runs in, which is

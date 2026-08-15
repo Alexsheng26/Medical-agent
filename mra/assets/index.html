@@ -129,6 +129,7 @@
   <h1>科研中间体 · MRA</h1>
   <span class="meta">数据目录 <code id="ws">…</code></span>
   <span class="meta">模型 <code id="model">…</code></span>
+  <span class="meta">版本 <code id="version">…</code></span>
 </header>
 
 <main>
@@ -634,6 +635,7 @@ document.getElementById("picker").addEventListener("cancel", () => finishPicker(
   }
   document.getElementById("ws").textContent = STATE.workspace;
   document.getElementById("model").textContent = STATE.model + "（" + STATE.provider + "）";
+  document.getElementById("version").textContent = "mra " + (STATE.version || "?");
   show("status");
 })();
 </script>
