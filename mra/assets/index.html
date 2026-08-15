@@ -88,6 +88,11 @@
     margin: 16px 0 0; max-height: 62vh; overflow-y: auto;
   }
   pre.out:empty { display: none; }
+  .idlink {
+    background: none; border: 0; padding: 0; cursor: pointer; font: inherit;
+    color: var(--accent); text-decoration: underline; text-underline-offset: 2px;
+  }
+  .idlink:hover { color: var(--ink); background: var(--accent-soft); }
   .status { font-size: 13px; margin-top: 10px; }
   .status.run { color: var(--accent); }
   .status.ok { color: var(--ok); }
@@ -178,6 +183,10 @@ const TASKS = [
       cmd: "search", fields: [
         { key: "topic", type: "text", label: "主题或临床问题", required: true },
         { key: "max", type: "number", label: "最多抓几篇", value: "50" },
+      ] },
+    { id: "library", name: "文献列表", lede: "库里有哪些文献，以及每一篇提炼出了什么。不花钱。",
+      cmd: "library", linkify: true, fields: [
+        { key: "id", type: "text", label: "文献编号", hint: "留空 = 列出全部。填一个编号 = 看那一篇的完整提炼结果（也可以直接点下面列表里的编号）。" },
       ] },
     { id: "status", name: "查看状态", lede: "文献数、假说版本、花费。不花钱。", cmd: "status", fields: [] },
   ]},
@@ -352,7 +361,7 @@ function runner(panel) {
   status.className = "status";
   panel.append(status, output);
 
-  return async function run(command, args, { onLine, onDone } = {}) {
+  return async function run(command, args, { onLine, onDone, linkify } = {}) {
     output.textContent = "";
     status.className = "status run";
     status.textContent = "正在运行…";
@@ -379,6 +388,10 @@ function runner(panel) {
       status.textContent = code === 0 ? "完成。"
         : code === 2 ? "已到达设定的上限，干净停下了。"
         : `出错了（退出码 ${code}）。上面最后几行是原因。`;
+      if (linkify && code === 0) linkifyIdentifiers(output, linkify);
+      // Following the tail shows progress while it runs; once it is finished
+      // you want to read from the beginning, not from wherever it stopped.
+      output.scrollTop = 0;
       if (onDone) onDone(code);
     });
     source.onerror = () => {
@@ -432,7 +445,12 @@ function show(id) {
       }
     }
     go.disabled = true;
-    run(task.cmd, args, { onDone: () => { go.disabled = false; } });
+    run(task.cmd, args, {
+      onDone: () => { go.disabled = false; },
+      // The list prints an identifier per row; typing one back in to read the
+      // card is the kind of step a browser exists to remove.
+      linkify: task.linkify ? (id => { store.id = () => id; go.click(); }) : null,
+    });
   };
 }
 
@@ -533,6 +551,25 @@ function renderDemo(panel) {
       },
     });
   };
+}
+
+function linkifyIdentifiers(pre, onPick) {
+  const pattern = /^(\d{6,9}|local:[0-9a-f]{6,})(\s)/;
+  const rebuilt = document.createDocumentFragment();
+  for (const line of pre.textContent.split("\n")) {
+    const match = line.match(pattern);
+    if (!match) {
+      rebuilt.append(document.createTextNode(line + "\n"));
+      continue;
+    }
+    const link = document.createElement("button");
+    link.textContent = match[1];
+    link.className = "idlink";
+    link.onclick = () => onPick(match[1]);
+    rebuilt.append(link, document.createTextNode(line.slice(match[1].length) + "\n"));
+  }
+  pre.textContent = "";
+  pre.append(rebuilt);
 }
 
 // -------------------------------------------------------------------- 选文件

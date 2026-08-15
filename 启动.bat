@@ -193,11 +193,12 @@ echo    2  导入文献      PDF / PubMed XML / 纯文本
 echo    3  提炼文献      逐篇结构化提炼（每篇一次调用）
 echo    4  科学对话      基于你的文献库追问
 echo    5  评估数据      打分 + 推荐候选期刊
-echo    6  查看状态      文献数、假说、花费
+echo    6  文献列表      看库里有什么、每篇提炼出了什么（不花钱）
 echo    7  引用核对      检查文稿里的引用是否真实（不花钱）
 echo    8  试用示例      导入仓库自带的 8 篇示例文献
 echo    9  连接自检      模型连不通时先跑这个
 echo   10  打开数据目录
+echo   11  查看状态      文献数、假说、花费
 echo    0  退出
 echo.
 set "CHOICE="
@@ -208,11 +209,12 @@ if "%CHOICE%"=="2" goto :do_import
 if "%CHOICE%"=="3" goto :do_digest
 if "%CHOICE%"=="4" goto :do_chat
 if "%CHOICE%"=="5" goto :do_assess
-if "%CHOICE%"=="6" goto :do_status
+if "%CHOICE%"=="6" goto :do_library
 if "%CHOICE%"=="7" goto :do_refs
 if "%CHOICE%"=="8" goto :do_demo
 if "%CHOICE%"=="9" goto :do_doctor
 if "%CHOICE%"=="10" goto :do_open
+if "%CHOICE%"=="11" goto :do_status
 if "%CHOICE%"=="0" goto :done
 echo   没有这个选项，请重新选。
 goto :menu
@@ -257,6 +259,16 @@ if not defined DATAF goto :menu
 set "NOTE="
 set /p "NOTE=补充说明（例如 n=12/组，可直接回车跳过）: "
 "%RUN%" -m mra assess %DATAF% --notes "%NOTE%"
+goto :after
+
+:do_library
+"%RUN%" -m mra library
+echo.
+echo   想看某一篇的完整提炼结果，输入它的编号（第一列那一串），直接回车跳过。
+set "DOCID="
+set /p "DOCID=编号: "
+if not defined DOCID goto :after
+"%RUN%" -m mra library %DOCID%
 goto :after
 
 :do_status

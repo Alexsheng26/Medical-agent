@@ -82,6 +82,7 @@ COMMANDS: dict[str, Spec] = {
     "usage": Spec(),
     "guide": Spec(),
     "hypotheses": Spec(),
+    "library": Spec(positional="id"),
     "demo": Spec(options={"to": Option("--to")}),
     "memory": Spec(options={"refresh": Option("--refresh", "bool")}),
     "import": Spec(

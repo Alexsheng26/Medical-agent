@@ -18,7 +18,7 @@ from . import doctor as doctor_mod
 from . import citations, deai, dialogue, journal as journal_mod, memory as memory_mod
 from . import brief as brief_mod
 from . import figures as figures_mod
-from . import ingest, pipeline, review as review_mod, writing
+from . import ingest, library as library_mod, pipeline, review as review_mod, writing
 from .config import Config
 from .llm import LLM, RefusalError
 from .usage import Ledger
@@ -472,6 +472,16 @@ def _slug(text: str) -> str:
 
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower())[:24].strip("-")
     return slug or "watch"
+
+
+def cmd_library(args, cfg: Config) -> int:
+    """List what is stored, or print one card in full. No model call."""
+    with _store(cfg) as store:
+        if args.id:
+            print(library_mod.format_card(store, args.id))
+        else:
+            print(library_mod.format_library(store))
+    return 0
 
 
 def cmd_digest(args, cfg: Config) -> int:
@@ -977,6 +987,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Stop once this much has been spent (default: from config)")
     p.add_argument("--no-digest", action="store_true", help="Fetch only; do not extract")
     p.add_argument("--quiet", action="store_true", help="Only speak when there is news")
+
+    p = add("library", cmd_library, "List stored documents, or show one card")
+    p.add_argument("id", nargs="?", help="PMID or local:xxxxxxxx (omit to list all)")
 
     p = add("digest", cmd_digest, "Extract structured cards for stored articles")
     p.add_argument("--limit", type=int, help="Only process this many")
