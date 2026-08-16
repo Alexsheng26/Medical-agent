@@ -191,7 +191,7 @@ echo ============================================================
 echo.
 echo    1  网页界面      推荐 —— 在浏览器里操作，不用记命令
 echo.
-echo    2  导入文献      PDF / PubMed XML / 纯文本
+echo    2  导入并阅读    PDF / PubMed XML / 纯文本，读完直接出分析
 echo    3  提炼文献      逐篇结构化提炼（每篇一次调用）
 echo    4  科学对话      基于你的文献库追问
 echo    5  评估数据      打分 + 推荐候选期刊
@@ -236,7 +236,7 @@ echo   把 PDF 文件拖进这个窗口然后回车（可以先拖一个试试�
 set "TARGET="
 set /p "TARGET=文件: "
 if not defined TARGET goto :menu
-"%RUN%" -m mra import %TARGET%
+"%RUN%" -m mra import %TARGET% --digest
 goto :after
 
 :do_digest

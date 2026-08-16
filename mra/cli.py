@@ -362,9 +362,11 @@ def cmd_import(args, cfg: Config) -> int:
     needs_model = any(
         p.suffix.lower() in (ingest.PDF_SUFFIXES | ingest.TEXT_SUFFIXES) for p in paths
     )
-    llm = _llm(cfg) if (needs_model and not args.no_metadata) else None
+    wants_model = args.digest or (needs_model and not args.no_metadata)
+    llm = _llm(cfg) if wants_model else None
 
     with _store(cfg) as store:
+        before = set(store.all_pmids())
         result = pipeline.import_files(
             cfg, store, paths, llm=llm, topic=args.topic,
             on_file=lambda path, n, warns: print(
@@ -380,8 +382,30 @@ def cmd_import(args, cfg: Config) -> int:
                 print(f"  ! {warning}")
 
         print(f"\nKnowledge base now holds {store.count_articles()} documents.")
-        if result.added:
-            print("Next: `mra digest` to extract structured cards.")
+
+        if not result.added:
+            return 0
+        if not args.digest:
+            print("Next: `mra digest` to extract structured cards, "
+                  "or re-run with --digest to do both now.")
+            return 0
+
+        # Import answers "is it in there", which is not the question anyone has
+        # after handing over a paper. Reading it was a second command and seeing
+        # the reading a third — three steps to learn what one PDF says.
+        fresh = [pmid for pmid in store.all_pmids() if pmid not in before]
+        print(f"\n正在阅读这 {len(fresh)} 篇（每篇一次调用）…")
+        ok, failed = pipeline.digest(
+            cfg, store, llm or _llm(cfg), only=fresh,
+            on_progress=lambda i, n, pmid: print(f"  [{i}/{n}] {pmid}", end="\r", flush=True),
+        )
+        print(f"读完 {ok} 篇" + (f"，{failed} 篇失败" if failed else "") + "。\n")
+
+        for pmid in fresh:
+            if store.get_card(pmid) is not None:
+                print("═" * 78)
+                print(library_mod.format_card(store, pmid))
+                print()
     return 0
 
 
@@ -967,6 +991,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--topic", default="", help="Label these records with a topic")
     p.add_argument("--no-metadata", action="store_true",
                    help="Skip metadata extraction for PDFs/text (no API call)")
+    p.add_argument("--digest", action="store_true",
+                   help="Read each new document and print what it says")
 
     p = sub.add_parser("watch", help="Saved searches replayed by `mra sync`")
     wsub = p.add_subparsers(dest="watch_command", required=True)

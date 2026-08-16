@@ -168,9 +168,12 @@ async function api(path, options = {}) {
 
 const TASKS = [
   { group: "文献库", items: [
-    { id: "import", name: "导入文献", lede: "PDF、PubMed 导出的 XML、或纯文本。XML 不花钱。",
-      cmd: "import", fields: [
-        { key: "files", type: "files", label: "文件", hint: "可以一次选多个。PubMed 网页版：Send to → File → Format: XML。" },
+    { id: "import", name: "导入并阅读", lede: "把文章交给它读。PDF、PubMed 导出的 XML、或纯文本，读完直接出分析。",
+      cmd: "import", linkify: true, fields: [
+        { key: "files", type: "files", label: "文件", required: true,
+          hint: "可以一次选多个。PubMed 网页版导出：Send to → File → Format: XML。" },
+        { key: "digest", type: "check", checked: true,
+          label: "读完直接出分析（每篇一次调用；取消勾选则只入库，之后可在「文献列表」里再读）" },
         { key: "topic", type: "text", label: "主题标签", hint: "可留空，用来标记这批文献属于哪个课题。" },
         { key: "no_metadata", type: "check", label: "跳过元数据抽取（完全离线，标题只能用文件名）" },
       ] },

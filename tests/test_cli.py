@@ -96,6 +96,63 @@ class TestImport:
             assert store.count_articles() == 2
             assert store.get_article("31234567").journal_abbrev == "Hepatology"
 
+    def test_import_alone_says_how_to_get_the_reading(self, workspace, capsys):
+        """Import on its own answers "is it in there", not "what does it say"."""
+        run(["init"], workspace)
+        run(["import", str(self.FIXTURE)], workspace)
+        assert "--digest" in capsys.readouterr().out
+
+    def test_digest_reads_only_what_this_import_added(self, workspace, capsys, monkeypatch):
+        """A second import must not re-read — and re-pay for — the whole library."""
+        run(["init"], workspace)
+        run(["import", str(self.FIXTURE)], workspace)
+
+        seen: list[list[str]] = []
+
+        def fake_digest(cfg, store, llm, *, only=None, **kwargs):
+            seen.append(list(only or []))
+            for pmid in only or []:
+                store.save_card(pmid, {
+                    "pmid": pmid, "scientific_question": "Q", "key_findings": ["F"],
+                    "methods": ["M"], "novelty_claim": "N", "limitations": ["L"],
+                    "mechanism_keywords": ["K"], "clinical_relevance": "C",
+                    "evidence_strength": 3,
+                })
+            return len(only or []), 0
+
+        monkeypatch.setattr(cli.pipeline, "digest", fake_digest)
+        monkeypatch.setattr(cli, "_llm", lambda cfg: object())
+
+        second = Path(__file__).parent / "fixtures" / "efetch_sample.xml"
+        run(["import", str(second), "--digest"], workspace)
+
+        # Everything in the fixture was already stored, so nothing was re-read.
+        assert seen == [] or seen == [[]]
+
+    def test_digest_prints_the_card_rather_than_a_count(self, workspace, capsys, monkeypatch):
+        run(["init"], workspace)
+
+        def fake_digest(cfg, store, llm, *, only=None, **kwargs):
+            for pmid in only or []:
+                store.save_card(pmid, {
+                    "pmid": pmid,
+                    "scientific_question": "门脉巨噬细胞是否驱动纤维化",
+                    "key_findings": ["胶原减少 47%"], "methods": ["条件敲除"],
+                    "novelty_claim": "定位到单核来源", "limitations": ["单一模型"],
+                    "mechanism_keywords": ["TGF-β1"], "clinical_relevance": "给药区室",
+                    "evidence_strength": 3,
+                })
+            return len(only or []), 0
+
+        monkeypatch.setattr(cli.pipeline, "digest", fake_digest)
+        monkeypatch.setattr(cli, "_llm", lambda cfg: object())
+
+        assert run(["import", str(self.FIXTURE), "--digest"], workspace) == 0
+        out = capsys.readouterr().out
+        assert "科学问题" in out
+        assert "门脉巨噬细胞是否驱动纤维化" in out
+        assert "证据强度" in out
+
     def test_reimport_does_not_duplicate(self, workspace):
         run(["init"], workspace)
         run(["import", str(self.FIXTURE)], workspace)

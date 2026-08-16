@@ -91,6 +91,7 @@ COMMANDS: dict[str, Spec] = {
         options={
             "topic": Option("--topic"),
             "no_metadata": Option("--no-metadata", "bool"),
+            "digest": Option("--digest", "bool"),
         },
     ),
     "search": Spec(
