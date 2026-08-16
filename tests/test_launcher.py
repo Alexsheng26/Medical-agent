@@ -63,6 +63,8 @@ def test_goto_targets_all_exist(lines: list[str]):
         for match in re.finditer(r"goto\s+:?(\w+)", line, re.IGNORECASE):
             targets.add(match.group(1).lower())
 
+    # `goto :eof` is cmd's built-in return from a `call`, not a label.
+    targets.discard("eof")
     missing = sorted(targets - labels)
     assert not missing, f"goto targets with no label: {missing}"
 

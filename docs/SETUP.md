@@ -323,6 +323,16 @@ python -m mra guide
 **`No API credentials found`**
 key 没设成功，或者设完没重开终端。Windows 上 `setx` 对当前窗口不生效，必须新开一个。
 
+**换了 key（或者换服务商），但工具还在用旧的**
+key 是写进 Windows 环境变量的，**覆盖更新代码不会动它**——所以更新之后不用重新输，
+但如果你把旧 key 作废了，里面存的就是个死值，而启动器看它"已设置"就不再问你。
+
+菜单里选 **`12 更换 API key`**，重新选一次服务商、贴新 key 就行。从 DeepSeek 换回
+Claude 时它会把 `MRA_*` 那几个变量一并清掉——不清的话，新的 Claude key 会被发去
+DeepSeek 的地址。
+
+命令行的等价写法：`setx MRA_API_KEY "sk-新的"`，然后**新开一个窗口**。
+
 **PubMed 连不上 / `mra search` 超时**
 学校网络或防火墙挡了 NCBI。绕过办法：在浏览器里正常搜 PubMed，
 **Send to → File → Format: XML → Create File**，然后

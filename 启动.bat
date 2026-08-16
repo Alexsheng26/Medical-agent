@@ -113,7 +113,18 @@ REM has run, so the key would always be saved empty.
 if defined ANTHROPIC_API_KEY goto :havekey
 if defined MRA_API_KEY goto :havekey
 echo.
-echo   还没有设置 API key。先选一个模型服务：
+echo   还没有设置 API key。
+call :ask_key
+goto :havekey
+
+REM Reached by `call`, from startup and from the menu. A key that was set once
+REM and later revoked used to be unreachable: the checks above skip the prompt
+REM because the variable is still defined, so the only way out was knowing what
+REM setx is. Rotating a leaked key should not require that.
+
+:ask_key
+echo.
+echo   选一个模型服务：
 echo.
 echo     1  Claude      判断质量最好，按量计费
 echo     2  DeepSeek    便宜很多，全部命令都实测跑通过
@@ -123,7 +134,7 @@ set "PICK="
 set /p "PICK=请输入数字后回车: "
 if "%PICK%"=="1" goto :key_claude
 if "%PICK%"=="2" goto :key_deepseek
-goto :havekey
+goto :eof
 
 :key_claude
 echo.
@@ -132,11 +143,20 @@ echo   然后在下面粘贴（在窗口里点右键就是粘贴）。
 start "" "https://platform.claude.com/settings/keys"
 set "NEWKEY="
 set /p "NEWKEY=API key (sk-ant-...): "
-if not defined NEWKEY goto :havekey
+if not defined NEWKEY goto :eof
 setx ANTHROPIC_API_KEY "%NEWKEY%" >nul
 set "ANTHROPIC_API_KEY=%NEWKEY%"
+REM Leaving MRA_PROVIDER set would send this Anthropic key to DeepSeek.
+reg delete "HKCU\Environment" /v MRA_PROVIDER /f >nul 2>&1
+reg delete "HKCU\Environment" /v MRA_BASE_URL /f >nul 2>&1
+reg delete "HKCU\Environment" /v MRA_MODEL /f >nul 2>&1
+reg delete "HKCU\Environment" /v MRA_API_KEY /f >nul 2>&1
+set "MRA_PROVIDER="
+set "MRA_BASE_URL="
+set "MRA_MODEL="
+set "MRA_API_KEY="
 echo   [OK] 已保存，以后不用再输
-goto :havekey
+goto :eof
 
 :key_deepseek
 echo.
@@ -145,7 +165,7 @@ echo   然后在下面粘贴（在窗口里点右键就是粘贴）。
 start "" "https://platform.deepseek.com/api_keys"
 set "NEWKEY="
 set /p "NEWKEY=API key (sk-...): "
-if not defined NEWKEY goto :havekey
+if not defined NEWKEY goto :eof
 setx MRA_PROVIDER "openai" >nul
 setx MRA_BASE_URL "https://api.deepseek.com" >nul
 setx MRA_MODEL "deepseek-chat" >nul
@@ -155,6 +175,8 @@ set "MRA_BASE_URL=https://api.deepseek.com"
 set "MRA_MODEL=deepseek-chat"
 set "MRA_API_KEY=%NEWKEY%"
 echo   [OK] 已保存，以后不用再输
+goto :eof
+
 :havekey
 
 REM DeepSeek 走的是 OpenAI 兼容接口，要多装一个包。检查放在分支外面，
@@ -201,6 +223,7 @@ echo    8  试用示例      导入仓库自带的 8 篇示例文献
 echo    9  连接自检      模型连不通时先跑这个
 echo   10  打开数据目录
 echo   11  查看状态      文献数、假说、花费
+echo   12  更换 API key  换服务商，或换掉已经作废的 key
 echo    0  退出
 echo.
 set "CHOICE="
@@ -217,6 +240,7 @@ if "%CHOICE%"=="8" goto :do_demo
 if "%CHOICE%"=="9" goto :do_doctor
 if "%CHOICE%"=="10" goto :do_open
 if "%CHOICE%"=="11" goto :do_status
+if "%CHOICE%"=="12" goto :do_key
 if "%CHOICE%"=="0" goto :done
 echo   没有这个选项，请重新选。
 goto :menu
@@ -271,6 +295,20 @@ set "DOCID="
 set /p "DOCID=编号: "
 if not defined DOCID goto :after
 "%RUN%" -m mra library %DOCID%
+goto :after
+
+:do_key
+call :ask_key
+REM Switching to DeepSeek here needs the same extra package the startup path
+REM installs; without this the next command fails on a missing import.
+if /i not "%MRA_PROVIDER%"=="openai" goto :key_done
+"%RUN%" -c "import openai" >nul 2>&1
+if not errorlevel 1 goto :key_done
+echo   [..] 正在安装 DeepSeek 需要的组件（约 20 秒）
+"%RUN%" -m pip install --disable-pip-version-check -q openai
+:key_done
+echo.
+echo   已更新。选 9 连接自检验证一下。
 goto :after
 
 :do_status
