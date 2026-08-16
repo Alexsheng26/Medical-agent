@@ -19,11 +19,17 @@ from .store import Store
 
 TITLE_WIDTH = 58
 NO_LINE_START = "，。、；：？！）》」』’”%,.;:?!)]}"
+# Wording follows LitCard.evidence_strength, whose anchors are 1 = a single
+# in-vitro observation, 3 = solid animal or observational human data, 5 =
+# randomised or multi-cohort human evidence. 2 and 4 are the gaps between.
+# "2 = 体外为主，或小样本" was wrong: the first paper this ran on was a
+# cross-sectional study of 9,781 people that landed at 2 for design reasons,
+# and the label called it small and in-vitro.
 STRENGTH_WORDS = {
     1: "1 单一体外观察",
-    2: "2 体外为主，或小样本",
+    2: "2 弱于扎实的观察性研究（设计、报告或验证上有硬伤）",
     3: "3 扎实的动物或观察性人群数据",
-    4: "4 多来源人群证据",
+    4: "4 强于单项观察性研究，但不到随机对照",
     5: "5 随机对照或多队列人群证据",
 }
 

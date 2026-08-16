@@ -99,6 +99,23 @@ class TestCard:
         assert "共 4 位" in library.format_card(store, "31234567")
 
 
+class TestStrengthWording:
+    def test_every_level_on_the_scale_has_wording(self):
+        from mra.schemas import LitCard
+
+        assert set(library.STRENGTH_WORDS) == {1, 2, 3, 4, 5}
+
+    def test_level_two_does_not_claim_in_vitro_or_small(self):
+        """The first real paper to score 2 had n=9,781 — it scored low on design,
+        not on size, and the label said the opposite."""
+        assert "体外" not in library.STRENGTH_WORDS[2]
+        assert "小样本" not in library.STRENGTH_WORDS[2]
+
+    def test_wording_starts_with_its_own_number(self):
+        for level, words in library.STRENGTH_WORDS.items():
+            assert words.startswith(str(level))
+
+
 class TestWrapping:
     def test_chinese_counts_as_two_columns(self):
         wrapped = library._wrap("中" * 60, width=40)
