@@ -9,6 +9,9 @@ set "RUN="
 set "PIPFLAGS="
 set "VENVPY=%~dp0.venv\Scripts\python.exe"
 set "WORK=%~dp0workspace"
+set "MRA_ROOT=%~dp0workspace"
+set "PROJ="
+set "PROJARG="
 
 echo.
 echo ============================================================
@@ -201,7 +204,7 @@ echo.
 echo   首次初始化工作目录。
 set "EMAIL="
 set /p "EMAIL=你的邮箱（NCBI 检索要求提供，可直接回车跳过）: "
-"%RUN%" -m mra init --email "%EMAIL%" >nul 2>&1
+"%RUN%" -m mra %PROJARG% init --email "%EMAIL%" >nul 2>&1
 :inited
 
 REM ------------------------------------------------------------------- 菜单
@@ -209,6 +212,8 @@ REM ------------------------------------------------------------------- 菜单
 echo.
 echo ============================================================
 echo   数据目录: %WORK%
+if defined PROJ echo   当前课题: %PROJ%
+if not defined PROJ echo   当前课题: 默认
 echo ============================================================
 echo.
 echo    1  网页界面      推荐 —— 在浏览器里操作，不用记命令
@@ -224,6 +229,8 @@ echo    9  连接自检      模型连不通时先跑这个
 echo   10  打开数据目录
 echo   11  查看状态      文献数、假说、花费
 echo   12  更换 API key  换服务商，或换掉已经作废的 key
+echo   13  所有课题      横看每个课题走到哪一步（不花钱）
+echo   14  切换 / 新建课题
 echo    0  退出
 echo.
 set "CHOICE="
@@ -241,6 +248,8 @@ if "%CHOICE%"=="9" goto :do_doctor
 if "%CHOICE%"=="10" goto :do_open
 if "%CHOICE%"=="11" goto :do_status
 if "%CHOICE%"=="12" goto :do_key
+if "%CHOICE%"=="13" goto :do_projects
+if "%CHOICE%"=="14" goto :do_switch
 if "%CHOICE%"=="0" goto :done
 echo   没有这个选项，请重新选。
 goto :menu
@@ -251,7 +260,7 @@ echo   正在启动网页界面，浏览器会自动打开。
 echo   界面只在这台电脑上，别人访问不到。
 echo   要停下来回到这个菜单，在本窗口按 Ctrl-C。
 echo.
-"%RUN%" -m mra web
+"%RUN%" -m mra %PROJARG% web
 goto :after
 
 :do_import
@@ -260,11 +269,11 @@ echo   把 PDF 文件拖进这个窗口然后回车（可以先拖一个试试�
 set "TARGET="
 set /p "TARGET=文件: "
 if not defined TARGET goto :menu
-"%RUN%" -m mra import %TARGET% --digest
+"%RUN%" -m mra %PROJARG% import %TARGET% --digest
 goto :after
 
 :do_digest
-"%RUN%" -m mra digest
+"%RUN%" -m mra %PROJARG% digest
 goto :after
 
 :do_chat
@@ -273,7 +282,7 @@ echo   直接输入你的问题，中文英文都行。留空回车返回菜单�
 set "MSG="
 set /p "MSG=问题: "
 if not defined MSG goto :menu
-"%RUN%" -m mra chat "%MSG%"
+"%RUN%" -m mra %PROJARG% chat "%MSG%"
 goto :after
 
 :do_assess
@@ -284,17 +293,50 @@ set /p "DATAF=数据文件: "
 if not defined DATAF goto :menu
 set "NOTE="
 set /p "NOTE=补充说明（例如 n=12/组，可直接回车跳过）: "
-"%RUN%" -m mra assess %DATAF% --notes "%NOTE%"
+"%RUN%" -m mra %PROJARG% assess %DATAF% --notes "%NOTE%"
 goto :after
 
 :do_library
-"%RUN%" -m mra library
+"%RUN%" -m mra %PROJARG% library
 echo.
 echo   想看某一篇的完整提炼结果，输入它的编号（第一列那一串），直接回车跳过。
 set "DOCID="
 set /p "DOCID=编号: "
 if not defined DOCID goto :after
-"%RUN%" -m mra library %DOCID%
+"%RUN%" -m mra %PROJARG% library %DOCID%
+goto :after
+
+:do_projects
+"%RUN%" -m mra project list
+goto :after
+
+REM PROJ is empty for the root workspace, which is where a single-project
+REM install already keeps everything. Empty means "pass no --project", so the
+REM existing layout keeps working untouched.
+
+:do_switch
+"%RUN%" -m mra project list
+echo.
+echo   输入课题名切换；输入一个新名字则新建；直接回车回到「默认」。
+set "NEWPROJ="
+set /p "NEWPROJ=课题名: "
+if not defined NEWPROJ goto :switch_default
+if exist "%WORK%\%NEWPROJ%\.mra" goto :switch_done
+"%RUN%" -m mra project new "%NEWPROJ%"
+if errorlevel 1 goto :after
+goto :switch_done
+
+:switch_default
+set "PROJ="
+set "PROJARG="
+echo   已切回「默认」课题。
+goto :after
+
+:switch_done
+set "PROJ=%NEWPROJ%"
+set "PROJARG=--project=%NEWPROJ%"
+echo.
+echo   已切换到「%NEWPROJ%」。菜单里的每一项从现在起都作用于这个课题。
 goto :after
 
 :do_key
@@ -312,9 +354,9 @@ echo   已更新。选 9 连接自检验证一下。
 goto :after
 
 :do_status
-"%RUN%" -m mra status
+"%RUN%" -m mra %PROJARG% status
 echo.
-"%RUN%" -m mra usage
+"%RUN%" -m mra %PROJARG% usage
 goto :after
 
 :do_refs
@@ -323,18 +365,18 @@ echo   把要检查的文稿（.md / .txt）拖进窗口然后回车。
 set "DOC="
 set /p "DOC=文稿: "
 if not defined DOC goto :menu
-"%RUN%" -m mra refs %DOC% --list
+"%RUN%" -m mra %PROJARG% refs %DOC% --list
 goto :after
 
 :do_demo
-"%RUN%" -m mra demo
-"%RUN%" -m mra import demo_corpus.xml
+"%RUN%" -m mra %PROJARG% demo
+"%RUN%" -m mra %PROJARG% import demo_corpus.xml
 echo.
 echo   导入完成。可以选 3 试着问：这批文献里最大的矛盾是什么
 goto :after
 
 :do_doctor
-"%RUN%" -m mra doctor
+"%RUN%" -m mra %PROJARG% doctor
 goto :after
 
 :do_open

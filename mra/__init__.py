@@ -4,4 +4,4 @@
 # the launcher banner and by `mra status`, because "why does pressing 1 do
 # nothing" is otherwise unanswerable from a screenshot — someone running a ZIP
 # downloaded last week has a different menu and no way to know it.
-__version__ = "0.4.1"
+__version__ = "0.5.0"

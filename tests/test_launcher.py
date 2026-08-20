@@ -164,6 +164,17 @@ def test_every_invocation_uses_run(lines: list[str]):
         assert '"%RUN%"' in line, f"line {number}: mra invoked without %RUN%"
 
 
+def test_every_invocation_carries_the_current_project(lines: list[str]):
+    """A menu item that ignores %PROJARG% silently acts on the wrong project —
+    it imports into 默认 while the header says 肝纤维化."""
+    for number, line in enumerate(lines, 1):
+        if "-m mra" not in line or PROSE.match(line):
+            continue
+        if "-m mra project" in line:
+            continue  # `project list` and `project new` span every project
+        assert "%PROJARG%" in line, f"line {number}: missing %PROJARG%"
+
+
 def test_deepseek_branch_sets_every_variable_the_backend_reads(raw: str):
     """A half-configured provider fails at the first call, not at setup."""
     start = raw.index("\r\n:key_deepseek\r\n")

@@ -30,6 +30,11 @@
   header h1 { margin: 0; font-size: 17px; letter-spacing: .02em; }
   header .meta { color: var(--muted); font-size: 12.5px; }
   header .meta code { background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; }
+  header select {
+    font: inherit; font-size: 13px; padding: 2px 6px; border-radius: 5px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  button.tiny { padding: 2px 8px; font-size: 12px; }
   main { display: grid; grid-template-columns: 216px 1fr; min-height: calc(100vh - 53px); }
   @media (max-width: 760px) { main { grid-template-columns: 1fr; } nav { border-right: 0 !important; } }
 
@@ -127,6 +132,10 @@
 
 <header>
   <h1>科研中间体 · MRA</h1>
+  <span class="meta">课题
+    <select id="project" title="切换课题。每个课题是独立的文献库和假说线。"></select>
+    <button class="ghost tiny" id="newproject">＋ 新建</button>
+  </span>
   <span class="meta">数据目录 <code id="ws">…</code></span>
   <span class="meta">模型 <code id="model">…</code></span>
   <span class="meta">版本 <code id="version">…</code></span>
@@ -192,7 +201,9 @@ const TASKS = [
       cmd: "library", linkify: true, fields: [
         { key: "id", type: "text", label: "文献编号", hint: "留空 = 列出全部。填一个编号 = 看那一篇的完整提炼结果（也可以直接点下面列表里的编号）。" },
       ] },
-    { id: "status", name: "查看状态", lede: "文献数、假说版本、花费。不花钱。", cmd: "status", fields: [] },
+    { id: "project_list", name: "所有课题", lede: "横着看一眼：每个课题有多少文献、读了多少、走到哪一版假说、花了多少。不花钱。",
+      cmd: "project_list", fields: [] },
+    { id: "status", name: "查看状态", lede: "当前课题的文献数、假说版本、花费。不花钱。", cmd: "status", fields: [] },
   ]},
   { group: "想清楚", items: [
     { id: "chat", name: "科学对话", lede: "每一轮都先检索你自己的文献库，再回答。中文提问也能命中英文语料。", chat: true },
@@ -371,7 +382,10 @@ function runner(panel) {
     status.textContent = "正在运行…";
     let job;
     try {
-      job = await api("/api/run", { method: "POST", body: JSON.stringify({ command, args }) });
+      job = await api("/api/run", {
+        method: "POST",
+        body: JSON.stringify({ command, args, project: STATE.project }),
+      });
     } catch (error) {
       status.className = "status bad";
       status.textContent = error.message;
@@ -499,7 +513,7 @@ function renderChat(panel) {
     let collected = "";
     const job = await api("/api/run", {
       method: "POST",
-      body: JSON.stringify({ command: "chat", args: { message } }),
+      body: JSON.stringify({ command: "chat", args: { message }, project: STATE.project }),
     }).catch(error => { reply.textContent = error.message; return null; });
     if (!job) { send.disabled = false; return; }
 
@@ -528,7 +542,10 @@ function renderChat(panel) {
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) send.click();
   };
   reset.onclick = async () => {
-    const job = await api("/api/run", { method: "POST", body: JSON.stringify({ command: "chat", args: { reset: true } }) });
+    const job = await api("/api/run", {
+      method: "POST",
+      body: JSON.stringify({ command: "chat", args: { reset: true }, project: STATE.project }),
+    });
     log.innerHTML = "";
     status.textContent = "对话已清空。";
   };
@@ -623,6 +640,37 @@ document.getElementById("picker").addEventListener("cancel", () => finishPicker(
 
 // ----------------------------------------------------------------------- 启动
 
+function fillProjects() {
+  const picker = document.getElementById("project");
+  picker.innerHTML = "";
+  for (const name of STATE.projects || []) {
+    const option = document.createElement("option");
+    option.value = option.textContent = name;
+    if (name === STATE.project) option.selected = true;
+    picker.append(option);
+  }
+  // Switching reloads rather than swapping state in place: the workspace path,
+  // the file picker's starting folder and every panel's meaning all change with
+  // it, and a half-switched page is worse than a second of reload.
+  picker.onchange = () => {
+    location.search = "?t=" + encodeURIComponent(TOKEN) + "&p=" + encodeURIComponent(picker.value);
+  };
+}
+
+document.getElementById("newproject").onclick = async () => {
+  const name = prompt("新课题叫什么？（例如：肝纤维化，或 胰腺癌-张三）");
+  if (!name) return;
+  try {
+    await api("/api/run", { method: "POST", body: JSON.stringify({ command: "project_new", args: { name } }) });
+    // The job is spawned, not awaited; give it a moment to create the folder.
+    setTimeout(() => {
+      location.search = "?t=" + encodeURIComponent(TOKEN) + "&p=" + encodeURIComponent(name);
+    }, 1200);
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
 (async function start() {
   if (!TOKEN) {
     document.getElementById("panel").innerHTML =
@@ -631,11 +679,14 @@ document.getElementById("picker").addEventListener("cancel", () => finishPicker(
     return;
   }
   try {
-    STATE = await api("/api/state?t=" + encodeURIComponent(TOKEN));
+    const picked = new URLSearchParams(location.search).get("p") || "";
+    STATE = await api("/api/state?t=" + encodeURIComponent(TOKEN)
+                      + "&p=" + encodeURIComponent(picked));
   } catch (error) {
     document.getElementById("panel").innerHTML = "<h2>连不上</h2><p class='lede'>" + error.message + "</p>";
     return;
   }
+  fillProjects();
   document.getElementById("ws").textContent = STATE.workspace;
   document.getElementById("model").textContent = STATE.model + "（" + STATE.provider + "）";
   document.getElementById("version").textContent = "mra " + (STATE.version || "?");

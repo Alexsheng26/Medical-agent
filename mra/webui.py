@@ -39,6 +39,7 @@ from queue import Empty, Queue
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from . import projects
 from .config import Config
 
 HOST = "127.0.0.1"
@@ -82,6 +83,8 @@ COMMANDS: dict[str, Spec] = {
     "usage": Spec(),
     "guide": Spec(),
     "hypotheses": Spec(),
+    "project_list": Spec(prefix=("project", "list")),
+    "project_new": Spec(prefix=("project", "new"), positional="name"),
     "library": Spec(positional="id"),
     "demo": Spec(options={"to": Option("--to")}),
     "memory": Spec(options={"refresh": Option("--refresh", "bool")}),
@@ -444,7 +447,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if url.path == "/api/state":
-            self._json(self._state())
+            self._json(self._state((query.get("p") or [""])[0]))
         elif url.path == "/api/browse":
             start = (query.get("path") or [str(Path.home())])[0]
             self._json(listing(Path(start)))
@@ -478,17 +481,49 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------------ pieces
 
-    def _state(self) -> dict[str, Any]:
+    def _current_project(self) -> str:
+        """Which project the workspace this server was started in belongs to."""
+        for project in projects.discover():
+            if project.workspace == self.cfg.workspace:
+                return project.name
+        return ""
+
+    def _workspace_for(self, name: Any) -> Path:
+        """Resolve the project the page is currently showing.
+
+        Passed as a workspace rather than a `--project` flag because the flag is
+        global and would have to be spliced in ahead of the subcommand; sending
+        the resolved path keeps argv construction in one place.
+        """
+        if not name:
+            return self.cfg.workspace
+        return projects.workspace_for(str(name))
+
+    def _state(self, wanted: str = "") -> dict[str, Any]:
+        """What the page needs to describe itself.
+
+        The page may be showing a project other than the one this server was
+        started in, so the workspace path and the picker's starting folder have
+        to follow the selection — otherwise both quietly describe the wrong
+        project while the header says the right name.
+        """
         from . import __version__
+
+        try:
+            workspace = self._workspace_for(wanted)
+        except ValueError:
+            workspace, wanted = self.cfg.workspace, ""
 
         return {
             "version": __version__,
-            "workspace": str(self.cfg.workspace),
+            "workspace": str(workspace),
             "provider": self.cfg.provider or "anthropic",
             "model": self.cfg.model,
-            # Where the file picker opens. The project folder holds the data
-            # and the drafts; home is a longer walk from anything relevant.
-            "start_dir": str(self.cfg.workspace.parent),
+            "projects": [p.name for p in projects.discover()],
+            "project": wanted or self._current_project(),
+            # Where the file picker opens: the project folder holds the data and
+            # the drafts; home is a longer walk from anything relevant.
+            "start_dir": str(workspace.parent),
             "home": str(Path.home()),
             "costly": sorted(COSTLY),
         }
@@ -500,11 +535,12 @@ class Handler(BaseHTTPRequestHandler):
             fields = {}
         try:
             argv = build_argv(command, fields)
+            workspace = self._workspace_for(payload.get("project"))
         except ValueError as exc:
             self._json({"error": str(exc)}, 400)
             return
 
-        job = self.jobs.create(argv, self.cfg.workspace.parent, self.cfg.workspace)
+        job = self.jobs.create(argv, workspace.parent, workspace)
         self._json({"job": job.id, "argv": argv})
 
     def _stream(self, job_id: str) -> None:

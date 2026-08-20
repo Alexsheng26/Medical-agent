@@ -18,7 +18,8 @@ from . import doctor as doctor_mod
 from . import citations, deai, dialogue, journal as journal_mod, memory as memory_mod
 from . import brief as brief_mod
 from . import figures as figures_mod
-from . import ingest, library as library_mod, pipeline, review as review_mod, writing
+from . import ingest, library as library_mod, pipeline, projects as projects_mod
+from . import review as review_mod, writing
 from .config import Config
 from .llm import LLM, RefusalError
 from .usage import Ledger
@@ -116,7 +117,15 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
 
-    cfg = Config.load(args.workspace)
+    workspace = args.workspace
+    if args.project and not workspace:
+        try:
+            workspace = projects_mod.workspace_for(args.project)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+    cfg = Config.load(workspace)
     cfg.ensure_workspace()
 
     try:
@@ -275,7 +284,10 @@ def cmd_demo(args, cfg: Config) -> int:
     import shutil
     from importlib import resources
 
-    target = Path(args.to)
+    # Beside the knowledge base rather than in the current directory: with
+    # --project those differ, and files that land in whatever folder cmd
+    # happened to start in are files the researcher then has to hunt for.
+    target = Path(args.to) if args.to else cfg.workspace.parent
     target.mkdir(parents=True, exist_ok=True)
 
     copied = []
@@ -308,6 +320,25 @@ def cmd_doctor(args, cfg: Config) -> int:
     report = doctor_mod.run(cfg)
     print(doctor_mod.format_report(cfg, report))
     return 0 if report.prose_ok else 1
+
+
+def cmd_project_list(args, cfg: Config) -> int:
+    """Every project side by side. No model call."""
+    print(projects_mod.format_list(projects_mod.discover(), current=cfg.workspace))
+    return 0
+
+
+def cmd_project_new(args, cfg: Config) -> int:
+    workspace = projects_mod.create(args.name)
+    from .config import Config as _Config
+
+    fresh = _Config.load(workspace)
+    fresh.ncbi_email = cfg.ncbi_email  # the contact address is the researcher's, not the project's
+    fresh.save()
+    print(f"课题「{args.name}」已建好：{workspace.parent}")
+    print(f"\n开始用它：mra --project {args.name} import 文件.pdf --digest")
+    print("网页界面里在右上角的下拉框切换。")
+    return 0
 
 
 def cmd_status(args, cfg: Config) -> int:
@@ -957,6 +988,10 @@ def build_parser() -> argparse.ArgumentParser:
         "Run `mra guide` for the Chinese workflow overview.",
     )
     parser.add_argument("--workspace", help="Workspace directory (default: ./.mra)")
+    parser.add_argument(
+        "--project",
+        help="Work on this project (a folder under MRA_ROOT). Ignored if --workspace is given.",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command")
 
@@ -972,10 +1007,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--language", choices=["zh", "en"], help="Conversation language")
 
     p = add("demo", cmd_demo, "Copy the bundled sample corpus and data here")
-    p.add_argument("--to", default=".", help="Where to put them (default: here)")
+    p.add_argument("--to", help="Where to put them (default: beside the project's .mra)")
 
     add("doctor", cmd_doctor, "Check the model connection actually works")
     add("status", cmd_status, "Show what is in the workspace")
+
+    p = sub.add_parser("project", help="Several projects side by side")
+    psub = p.add_subparsers(dest="project_command", required=True)
+    pp = psub.add_parser("list", help="Show every project and how far along it is")
+    pp.set_defaults(func=cmd_project_list)
+    pp = psub.add_parser("new", help="Create a project")
+    pp.set_defaults(func=cmd_project_new)
+    pp.add_argument("name", help='例如 "肝纤维化"')
 
     p = add("web", cmd_web, "Open the browser interface (this machine only)")
     p.add_argument("--port", type=int, default=8765)
