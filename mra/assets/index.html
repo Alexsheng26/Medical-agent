@@ -252,6 +252,12 @@ const TASKS = [
   ]},
   { group: "工具", items: [
     { id: "demo", name: "试用示例", lede: "把自带的示例语料和数据复制到数据目录，然后导入。不花钱。", demo: true },
+    { id: "eval", name: "质量自检", lede: "拿一批已知有问题的材料跑一遍，看工具还抓不抓得出来。换模型、改提示词之后用它对比。",
+      cmd: "eval", fields: [
+        { key: "free_only", type: "check", checked: true,
+          label: "只跑不花钱的那几条（引用核验、AI 痕迹检查）" },
+        { key: "yes", type: "check", checked: true, label: "跳过花费确认" },
+      ] },
     { id: "doctor", name: "连接自检", lede: "两次极小的调用，验证 key、网络、以及结构化输出能不能用。", cmd: "doctor", fields: [] },
     { id: "usage", name: "花费明细", lede: "不花钱。", cmd: "usage", fields: [] },
     { id: "guide", name: "流程速查", lede: "不花钱。", cmd: "guide", fields: [] },

@@ -121,15 +121,20 @@ OpenAI 兼容这条路没有这个保证，所以做法是：强制一次 tool c
 预测却没改善葡萄糖本身，这是一个无意的特异性阴性对照"，或者"这个 95% CI 的宽度对不上
 n=34，汇总单位可能不是样本"。这类东西是模型能力的直接产物。
 
-所以真要换，**别凭感觉**：
+所以真要换，**别凭感觉，量一下**：
 
 ```bash
-# 同一份数据、同一个库，两边各跑一次
-MRA_PROVIDER=anthropic mra assess data.csv -o claude.json
-MRA_PROVIDER=openai MRA_MODEL=deepseek-chat mra assess data.csv -o deepseek.json
+mra eval -o claude.json                                    # 先存一份基线
+MRA_PROVIDER=openai MRA_MODEL=deepseek-chat \
+  mra eval --baseline claude.json                          # 换过去，直接看差在哪
 ```
 
-把两份输出并排读。半小时、几毛钱，比任何推演都准。
+它拿一批**已知有问题**的材料跑，逐条报告哪些问题被抓到了、哪些漏了，并且标出
+相对基线**变好还是变差**。一次约 $0.3–0.6。
+
+这比并排读两份输出可靠，因为并排读的时候人会挑自己想看的地方。但它也有明确的边界：
+量的是"已知问题被提到了没有"，**提到不等于论证到位**。所以拿它挡回归可以，
+拿它当质量分不行——真要判断值不值，还是得读那几条它漏掉的。
 
 ## 混着用可能更划算
 

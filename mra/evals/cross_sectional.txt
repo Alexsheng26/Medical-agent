@@ -1,0 +1,36 @@
+Serum microplastic burden and insulin resistance in adults: a population study with mechanistic annotation
+
+FICTIONAL — written as an evaluation case, not a real study. Every number here
+is invented. It is designed so that a competent reader must notice a specific
+set of problems; `mra eval` checks whether the tool notices them too.
+
+Abstract
+
+Objective. Reports on microplastic exposure and metabolic outcomes remain
+inconsistent, and the mechanisms are poorly characterised. We investigated how
+serum microplastic burden leads to insulin resistance in adults.
+
+Methods. We analysed 7,412 adults from a national nutrition survey spanning
+2009 to 2022. Serum polystyrene and polyethylene particle counts were quantified
+by pyrolysis GC-MS on a single stored sample per participant. Weighted quantile
+sum regression assessed the mixture effect on HOMA-IR, fasting insulin and
+HbA1c. Sex-stratified multivariable models tested for effect modification.
+Candidate pathways were identified by mining a toxicogenomic database, and
+binding was assessed by molecular docking against PPARG and NR1H3.
+
+Results. Higher serum microplastic burden was associated with higher HOMA-IR
+and fasting insulin, and with higher HbA1c. In sex-stratified analysis the
+association with fasting insulin was positive in men and negative in women,
+while HOMA-IR and HbA1c showed no significant difference between the sexes.
+Toxicogenomic mining nominated PPARG, NR1H3 and CD36 as genes linking particle
+exposure to insulin signalling, and docking indicated favourable binding of
+polystyrene oligomers to the PPARG ligand-binding domain. Pathway enrichment
+implicated PPAR signalling and lipid droplet formation.
+
+Conclusions. Serum microplastic burden drives insulin resistance in the general
+adult population through PPARG-mediated disruption of lipid handling, with
+effects that differ by sex. Population-level exposure reduction should be
+considered as a metabolic intervention.
+
+Keywords: microplastics; insulin resistance; HOMA-IR; PPARG; molecular docking;
+toxicogenomic mining; mixed exposure

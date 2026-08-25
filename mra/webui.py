@@ -83,6 +83,13 @@ COMMANDS: dict[str, Spec] = {
     "usage": Spec(),
     "guide": Spec(),
     "hypotheses": Spec(),
+    "eval": Spec(options={
+        "free_only": Option("--free-only", "bool"),
+        "only": Option("--only"),
+        "yes": Option("--yes", "bool"),
+        "output": _OUTPUT,
+        "baseline": Option("--baseline"),
+    }),
     "project_list": Spec(prefix=("project", "list")),
     "project_new": Spec(prefix=("project", "new"), positional="name"),
     "library": Spec(positional="id"),

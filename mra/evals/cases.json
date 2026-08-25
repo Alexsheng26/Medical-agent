@@ -1,0 +1,287 @@
+{
+  "_comment": [
+    "Each case runs one command against material whose defects are known, and",
+    "checks whether the output names them. An expectation passes when ANY of its",
+    "markers appears, case-insensitively, in the output.",
+    "",
+    "This measures recall of known findings — a necessary condition, not a",
+    "sufficient one. A model can print 'reverse causation' without having made",
+    "the argument, and this will score it as caught. What it catches reliably is",
+    "the opposite: a model that never mentions it definitely did not make the",
+    "point. That asymmetry is what makes it useful for detecting regression.",
+    "",
+    "Markers are deliberately multilingual: the same finding is worth the same",
+    "score whether the model answers in English or Chinese."
+  ],
+  "cases": [
+    {
+      "id": "refs-forgery",
+      "command": "refs",
+      "needs_model": false,
+      "why": "引用核验是机械保证，不是模型的自觉。它必须永远通过。",
+      "file": "forged.md",
+      "args": [
+        "--list"
+      ],
+      "expect": [
+        {
+          "id": "catches-fake-pmid",
+          "what": "抓出库里不存在的 PMID",
+          "any": [
+            "99999999"
+          ]
+        },
+        {
+          "id": "catches-fake-local",
+          "what": "抓出伪造的 local: 标记",
+          "any": [
+            "local:deadbeef",
+            "deadbeef"
+          ]
+        },
+        {
+          "id": "keeps-real-one",
+          "what": "真实存在的那条不误报",
+          "any": [
+            "2 verified",
+            "verified against"
+          ]
+        }
+      ],
+      "exit_code": 1,
+      "_exit_note": "refs 发现伪造引用时按设计返回 1；返回 0 才是坏了"
+    },
+    {
+      "id": "lint-ai-tells",
+      "command": "lint",
+      "needs_model": false,
+      "why": "去 AI 化由静态 lint 驱动，lint 本身失灵则整条链路失灵。",
+      "file": "ai_sounding.md",
+      "expect": [
+        {
+          "id": "flags-stock-phrases",
+          "what": "抓出套话开头",
+          "any": [
+            "in today's",
+            "it is important to note",
+            "stock",
+            "套话",
+            "formulaic"
+          ]
+        },
+        {
+          "id": "flags-uniformity",
+          "what": "抓出句长方差过低或段落过于均匀",
+          "any": [
+            "burstiness",
+            "variance",
+            "uniform",
+            "方差",
+            "均匀"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "digest-cross-sectional",
+      "command": "digest",
+      "needs_model": true,
+      "why": "一篇横断面研究写了因果结论、没报效应量、机制全靠计算。这四条是审稿人一定会问的。",
+      "expect": [
+        {
+          "id": "causal-overreach",
+          "what": "指出横断面设计撑不起 leads to / drives 的因果表述",
+          "any": [
+            "cross-section",
+            "causal",
+            "causation",
+            "temporal",
+            "横断面",
+            "因果",
+            "时序"
+          ]
+        },
+        {
+          "id": "reverse-causation",
+          "what": "提出反向因果或共同处置的可能",
+          "any": [
+            "reverse caus",
+            "reverse-caus",
+            "bidirection",
+            "反向因果",
+            "反向",
+            "confound by indication"
+          ]
+        },
+        {
+          "id": "no-effect-sizes",
+          "what": "指出摘要里没有效应量 / 置信区间 / p 值",
+          "any": [
+            "effect size",
+            "confidence interval",
+            "no ci",
+            "magnitude",
+            "效应量",
+            "置信区间",
+            "没有给出"
+          ]
+        },
+        {
+          "id": "in-silico-only",
+          "what": "指出机制部分全是计算的，对接不能证明通路激活",
+          "any": [
+            "in silico",
+            "docking",
+            "computational",
+            "no experimental",
+            "对接",
+            "计算",
+            "未经实验"
+          ]
+        },
+        {
+          "id": "unexplained-sex-split",
+          "what": "指出性别相反的结果没有生物学解释，可能是残余混杂或偶然",
+          "any": [
+            "residual confound",
+            "unexplained",
+            "not explained",
+            "implausible",
+            "chance finding",
+            "multiple compar",
+            "biologically",
+            "残余混杂",
+            "无法解释",
+            "未作解释",
+            "偶然"
+          ]
+        },
+        {
+          "id": "single-timepoint",
+          "what": "指出单次采样 / 单时点测量的局限",
+          "any": [
+            "single sample",
+            "single time",
+            "one sample",
+            "stored sample",
+            "单次",
+            "单时点",
+            "单一时间"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "figures-planted-mismatch",
+      "command": "figures",
+      "needs_model": true,
+      "why": "demo_notes 里的 18.9% 在 demo_data.csv 里没有对应列。这是故意埋的。",
+      "data": [
+        "demo_data.csv",
+        "demo_notes.md"
+      ],
+      "expect": [
+        {
+          "id": "notes-data-mismatch",
+          "what": "发现说明里的数字在数据文件里不存在",
+          "any": [
+            "18.9",
+            "cd68",
+            "not in demo_data",
+            "not present in",
+            "对不上",
+            "不存在",
+            "没有对应"
+          ]
+        },
+        {
+          "id": "caption-needs-n",
+          "what": "要求图注写清 n / 检验方法 / 误差棒",
+          "any": [
+            "error bar",
+            "sample size",
+            "statistical test",
+            "误差棒",
+            "检验方法",
+            "样本量"
+          ]
+        },
+        {
+          "id": "table-not-figure",
+          "what": "指出有内容该做成表而不是占正文图位",
+          "any": [
+            "table",
+            "表格",
+            "better as a table",
+            "supplementary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "assess-honest-ceiling",
+      "command": "assess",
+      "needs_model": true,
+      "why": "这批数据没有小鼠遗传学、没有干预实验、没有外部验证。评估必须说出天花板在哪。",
+      "data": [
+        "demo_data.csv",
+        "demo_notes.md"
+      ],
+      "expect": [
+        {
+          "id": "no-causal-experiment",
+          "what": "指出缺乏遗传学或干预实验，因此只能到相关层面",
+          "any": [
+            "knockout",
+            "genetic",
+            "intervention",
+            "causal",
+            "敲除",
+            "干预",
+            "遗传学",
+            "因果"
+          ]
+        },
+        {
+          "id": "single-centre",
+          "what": "指出单中心、无外部队列验证",
+          "any": [
+            "single centre",
+            "single center",
+            "external",
+            "validation",
+            "cohort",
+            "单中心",
+            "外部验证"
+          ]
+        },
+        {
+          "id": "in-vitro-limits",
+          "what": "指出体外部分是细胞系、n=3 的局限",
+          "any": [
+            "thp-1",
+            "cell line",
+            "in vitro",
+            "three independent",
+            "细胞系",
+            "体外",
+            "独立实验"
+          ]
+        },
+        {
+          "id": "names-candidate-journals",
+          "what": "推荐模式产出了冲刺/现实/稳妥的分档，而不是泛泛而谈",
+          "any": [
+            "冲刺",
+            "现实",
+            "稳妥",
+            "stretch",
+            "realistic",
+            "safe bet",
+            "aspirational"
+          ]
+        }
+      ]
+    }
+  ]
+}

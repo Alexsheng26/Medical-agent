@@ -947,6 +947,42 @@ def cmd_web(args, cfg: Config) -> int:
     return webui.serve(cfg, port=args.port, open_browser=not args.no_open)
 
 
+def cmd_eval(args, cfg: Config) -> int:
+    """Run the cases whose defects are known, and report what was missed."""
+    from . import evaluation
+
+    baseline = None
+    if args.baseline:
+        baseline = json.loads(read_text(Path(args.baseline)))
+
+    cases = evaluation.load_cases()
+    paid = [c for c in cases if c["needs_model"] and not args.free_only]
+    if paid and not args.free_only:
+        print(f"要跑 {len(cases) - len(paid)} 条免费用例和 {len(paid)} 条要调用模型的，"
+              "总共大约 $0.3–0.6（Claude；DeepSeek 便宜得多）。")
+        if not _confirm_spend(0.5, args):
+            return 2
+
+    report = evaluation.run(
+        cfg,
+        free_only=args.free_only,
+        only=args.only or "",
+        on_case=lambda case: print(f"  跑 {case['id']} …".ljust(46), end="\r", flush=True),
+    )
+    print(" " * 46, end="\r")
+    print(evaluation.format_report(report, baseline))
+
+    if args.output:
+        target = Path(args.output)
+        target.write_text(
+            json.dumps(evaluation.to_json(report), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"\n已写入 {target}（下次用 --baseline {target} 对比）")
+
+    return 0 if report.caught == report.total else 1
+
+
 def cmd_usage(args, cfg: Config) -> int:
     """Token and cost accounting. No API call."""
     ledger = Ledger.load(cfg.usage_path, cfg.model, cfg.prices)
@@ -1163,6 +1199,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = add("memory", cmd_memory, "Show the topic graph and fingerprint status")
     p.add_argument("--refresh", action="store_true", help="Rebuild from the knowledge base")
+
+    p = add("eval", cmd_eval, "Check the tool still catches known problems")
+    p.add_argument("--free-only", action="store_true",
+                   help="Only the cases that need no model call")
+    p.add_argument("--only", help="Run one case by id")
+    p.add_argument("--baseline", help="A previous --output file, to compare against")
+    p.add_argument("-o", "--output", help="Write the result as JSON")
+    p.add_argument("-y", "--yes", action="store_true", help="Skip the confirmation")
+    p.add_argument("--max-cost", type=float, help=argparse.SUPPRESS)
 
     add("usage", cmd_usage, "Show token usage and what it has cost")
 
