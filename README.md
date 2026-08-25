@@ -297,7 +297,13 @@ mra figures data.csv --journal Hepatology --notes "n=12/组"
 mra eval --free-only              # 不花钱，随时可跑
 mra eval -o claude.json           # 完整跑一遍，约 $0.3–0.6
 MRA_PROVIDER=openai mra eval --baseline claude.json   # 换成 DeepSeek，直接看差在哪
+mra eval --only digest-cross-sectional --show         # 只跑一条，并打印完整输出
 ```
+
+**漏了一条的时候，`--show` 是必须的。** 一条 ✗ 有两种可能：模型确实没说，或者
+标记列表太窄、没认出它换了个说法在说同一件事。**这两种的处理完全相反**——前者是模型
+退步，后者是评估集自己在虚报。不看原文没法分辨，而分辨不了的评估会让人去追一个
+不存在的回归。
 
 工具里有 481 个测试，但它们全都在测管道——JSON 解析得对不对、伪造的 PMID 抓不抓得住。
 **没有一个在测判断。** 换模型、改提示词、模型换代，对"读得好不好"的影响，在这条命令

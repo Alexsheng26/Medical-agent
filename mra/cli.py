@@ -955,12 +955,19 @@ def cmd_eval(args, cfg: Config) -> int:
     if args.baseline:
         baseline = json.loads(read_text(Path(args.baseline)))
 
+    # The estimate has to describe what will actually run, or it is a wrong
+    # number printed with the authority of a right one.
     cases = evaluation.load_cases()
-    paid = [c for c in cases if c["needs_model"] and not args.free_only]
-    if paid and not args.free_only:
+    if args.only:
+        cases = [c for c in cases if c["id"] == args.only]
+    if args.free_only:
+        cases = [c for c in cases if not c["needs_model"]]
+
+    paid = [c for c in cases if c["needs_model"]]
+    if paid:
         print(f"要跑 {len(cases) - len(paid)} 条免费用例和 {len(paid)} 条要调用模型的，"
-              "总共大约 $0.3–0.6（Claude；DeepSeek 便宜得多）。")
-        if not _confirm_spend(0.5, args):
+              f"大约 ${0.2 * len(paid):.2f}（Claude；DeepSeek 便宜得多）。")
+        if not _confirm_spend(0.2 * len(paid), args):
             return 2
 
     report = evaluation.run(
@@ -970,7 +977,7 @@ def cmd_eval(args, cfg: Config) -> int:
         on_case=lambda case: print(f"  跑 {case['id']} …".ljust(46), end="\r", flush=True),
     )
     print(" " * 46, end="\r")
-    print(evaluation.format_report(report, baseline))
+    print(evaluation.format_report(report, baseline, show_misses=args.show))
 
     if args.output:
         target = Path(args.output)
@@ -1205,6 +1212,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Only the cases that need no model call")
     p.add_argument("--only", help="Run one case by id")
     p.add_argument("--baseline", help="A previous --output file, to compare against")
+    p.add_argument("--show", action="store_true",
+                   help="Print the full output of any case that missed something")
     p.add_argument("-o", "--output", help="Write the result as JSON")
     p.add_argument("-y", "--yes", action="store_true", help="Skip the confirmation")
     p.add_argument("--max-cost", type=float, help=argparse.SUPPRESS)

@@ -145,20 +145,27 @@
         },
         {
           "id": "unexplained-sex-split",
-          "what": "指出性别相反的结果没有生物学解释，可能是残余混杂或偶然",
+          "what": "对性别相反的结果提出实质批评（无解释 / 算术上讲不通 / 缺交互检验）",
           "any": [
             "residual confound",
             "unexplained",
             "not explained",
-            "implausible",
+            "not reconciled",
+            "incoherent",
+            "inconsistent",
+            "interaction test",
+            "interaction term",
             "chance finding",
             "multiple compar",
-            "biologically",
+            "implausible",
             "残余混杂",
             "无法解释",
             "未作解释",
+            "讲不通",
+            "交互作用",
             "偶然"
-          ]
+          ],
+          "_found_better": "第一次跑时这条判为漏掉，其实是标记太窄。模型给的是更强的一条：HOMA-IR 由空腹胰岛素算出来，所以空腹胰岛素有性别差异而 HOMA-IR 没有，这在算术上就讲不通。它还指出分层结果被当成效应修饰、却没报交互作用检验。两条都比「无生物学解释」硬。标记必须能认出更好的答案，否则评估集会把模型的进步记成退步。"
         },
         {
           "id": "single-timepoint",

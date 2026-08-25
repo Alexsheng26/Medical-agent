@@ -240,7 +240,18 @@ def _spend(workspace: Path, cfg: Config) -> float | None:
 # ------------------------------------------------------------------ reporting
 
 
-def format_report(report: Report, baseline: dict[str, Any] | None = None) -> str:
+def format_report(
+    report: Report,
+    baseline: dict[str, Any] | None = None,
+    show_misses: bool = False,
+) -> str:
+    """Render the run.
+
+    `show_misses` prints the output of any case that missed something. Without
+    it a miss is unactionable: there is no way to tell a model that did not make
+    the point from a marker list too narrow to recognise that it did — and the
+    second kind silently inflates every future regression report.
+    """
     lines = [
         f"评估结果  {report.model}（{report.provider}）",
         "",
@@ -279,6 +290,15 @@ def format_report(report: Report, baseline: dict[str, Any] | None = None) -> str
         delta = report.caught - before
         arrow = "持平" if delta == 0 else (f"好了 {delta} 条" if delta > 0 else f"差了 {-delta} 条")
         lines.append(f"对比基线  {before} → {report.caught}（{arrow}）")
+
+    if show_misses:
+        for result in report.results:
+            if result.caught == result.total or not result.output:
+                continue
+            lines.append("")
+            lines.append(f"── {result.id} 的完整输出 " + "─" * 30)
+            lines.append(result.output.strip())
+            lines.append("─" * 50)
 
     missed = [
         (r.id, c.what) for r in report.results for c in r.checks if not c.caught
