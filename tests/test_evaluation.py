@@ -155,3 +155,64 @@ class TestRunSelection:
 
         with pytest.raises(ValueError, match="没有匹配"):
             evaluation.run(Config(), only="no-such-case")
+
+
+class TestBrokenCases:
+    """A case that produced nothing to check must not read as a model failure.
+
+    The first real run scored one case 0/6 and it looked like a regression. The
+    command it invoked prints a count, not the reading, so those six markers
+    could never have matched — the case was structurally incapable of passing.
+    """
+
+    def test_a_case_with_no_output_is_flagged_not_scored_as_missed(self, tmp_path, monkeypatch):
+        import subprocess
+
+        case = {
+            "id": "c", "command": "digest", "why": "w",
+            "sanity": {"what": "有一张卡片", "any": ["科学问题"]},
+            "expect": [{"id": "e", "what": "指出反向因果", "any": ["反向因果"]}],
+        }
+        monkeypatch.setattr(
+            evaluation, "_invoke",
+            lambda *a, **k: subprocess.CompletedProcess([], 0, "Extracted 9 cards\n", ""),
+        )
+        result = evaluation._run_case(case, tmp_path, tmp_path / ".mra")
+        assert result.broken
+        assert "不能当成模型没抓到" in result.broken
+
+    def test_a_case_that_did_produce_output_is_not_flagged(self, tmp_path, monkeypatch):
+        import subprocess
+
+        case = {
+            "id": "c", "command": "import", "why": "w",
+            "sanity": {"what": "有一张卡片", "any": ["科学问题"]},
+            "expect": [{"id": "e", "what": "指出反向因果", "any": ["反向因果"]}],
+        }
+        monkeypatch.setattr(
+            evaluation, "_invoke",
+            lambda *a, **k: subprocess.CompletedProcess(
+                [], 0, "科学问题\n  这项研究想问什么\n局限\n  存在反向因果的可能\n", ""
+            ),
+        )
+        result = evaluation._run_case(case, tmp_path, tmp_path / ".mra")
+        assert not result.broken
+        assert result.caught == 1
+
+    def test_the_summary_warns_when_any_case_is_broken(self):
+        result = evaluation.Result("c", "digest", "w",
+                                   checks=[evaluation.Check("e", "what", False)])
+        result.broken = "用例本身没产出可检查的内容"
+        text = evaluation.format_report(evaluation.Report(results=[result]))
+        assert "用例本身坏了" in text
+
+    def test_the_paid_case_now_runs_a_command_that_prints_its_reading(self):
+        """digest prints a count; import --digest prints the card."""
+        case = next(c for c in evaluation.load_cases() if c["id"] == "digest-cross-sectional")
+        assert case["command"] == "import"
+        assert "--digest" in case["args"]
+
+    def test_every_paid_case_declares_a_sanity_marker(self):
+        for case in evaluation.load_cases():
+            if case["needs_model"]:
+                assert case.get("sanity"), case["id"]

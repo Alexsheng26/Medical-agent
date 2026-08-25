@@ -11,7 +11,11 @@
     "point. That asymmetry is what makes it useful for detecting regression.",
     "",
     "Markers are deliberately multilingual: the same finding is worth the same",
-    "score whether the model answers in English or Chinese."
+    "score whether the model answers in English or Chinese.",
+    "",
+    "`sanity` 是用例的自检：它不计分，但如果没匹配上，说明这条用例根本没产出",
+    "可检查的内容——那是用例坏了，不是模型没抓到。第一次真跑就是靠这个发现",
+    "digest 用例结构性无法通过的（digest 只打印计数，不打印卡片）。"
   ],
   "cases": [
     {
@@ -84,7 +88,7 @@
     },
     {
       "id": "digest-cross-sectional",
-      "command": "digest",
+      "command": "import",
       "needs_model": true,
       "why": "一篇横断面研究写了因果结论、没报效应量、机制全靠计算。这四条是审稿人一定会问的。",
       "expect": [
@@ -169,7 +173,22 @@
             "单一时间"
           ]
         }
-      ]
+      ],
+      "file": "cross_sectional.txt",
+      "args": [
+        "--digest",
+        "--no-metadata"
+      ],
+      "_note": "`digest` 只打印「Extracted N cards」，不打印卡片内容——所以用它做用例，六条标记永远匹配不上。改用 import --digest，它读完直接把卡片打出来。",
+      "sanity": {
+        "what": "输出里确实有一张提炼卡片",
+        "any": [
+          "科学问题",
+          "scientific question",
+          "证据强度",
+          "evidence strength"
+        ]
+      }
     },
     {
       "id": "figures-planted-mismatch",
@@ -216,7 +235,17 @@
             "supplementary"
           ]
         }
-      ]
+      ],
+      "sanity": {
+        "what": "输出里确实有一份图表规划",
+        "any": [
+          "figure 1",
+          "图 1",
+          "panel",
+          "caption",
+          "图注"
+        ]
+      }
     },
     {
       "id": "assess-honest-ceiling",
@@ -281,7 +310,17 @@
             "aspirational"
           ]
         }
-      ]
+      ],
+      "sanity": {
+        "what": "输出里确实有一份五维评估",
+        "any": [
+          "novelty",
+          "新颖性",
+          "score",
+          "评分",
+          "/5"
+        ]
+      }
     }
   ]
 }

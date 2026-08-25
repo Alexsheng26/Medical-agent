@@ -57,6 +57,7 @@ class Result:
     checks: list[Check] = field(default_factory=list)
     exit_code: int = 0
     error: str = ""
+    broken: str = ""
     output: str = ""
 
     @property
@@ -78,6 +79,10 @@ class Report:
     @property
     def caught(self) -> int:
         return sum(r.caught for r in self.results)
+
+    @property
+    def broken(self) -> list[str]:
+        return [r.id for r in self.results if r.broken]
 
     @property
     def total(self) -> int:
@@ -155,8 +160,10 @@ def _seed(home: Path, workspace: Path) -> None:
     )
 
     _invoke(["init", "--email=eval@example.invalid"], home, workspace)
+    # The corpus is what assess and figures retrieve against. cross_sectional.txt
+    # is deliberately NOT imported here — its case imports it, because the
+    # reading is only printed by the command that produces it.
     _invoke(["import", "demo_corpus.xml"], home, workspace)
-    _invoke(["import", "cross_sectional.txt", "--no-metadata"], home, workspace)
 
 
 def _run_case(case: dict[str, Any], home: Path, workspace: Path) -> Result:
@@ -179,6 +186,17 @@ def _run_case(case: dict[str, Any], home: Path, workspace: Path) -> Result:
         result.error = _last_meaningful_line(completed.stdout)
 
     haystack = completed.stdout.lower()
+
+    # A case that produced nothing to check scores zero on every expectation,
+    # which is indistinguishable from a model that missed everything — and that
+    # is exactly how the first real run reported a case that could never pass.
+    sanity = case.get("sanity")
+    if sanity and not any(m.lower() in haystack for m in sanity["any"]):
+        result.broken = (
+            f"用例本身没产出可检查的内容（期望：{sanity['what']}）。"
+            "下面的 ✗ 不能当成模型没抓到。"
+        )
+
     for expectation in case["expect"]:
         found = any(marker.lower() in haystack for marker in expectation["any"])
         result.checks.append(Check(expectation["id"], expectation["what"], found))
@@ -240,11 +258,18 @@ def format_report(report: Report, baseline: dict[str, Any] | None = None) -> str
             if was is not None and was != check.caught:
                 change = "  ← 变好了" if check.caught else "  ← 变差了"
             lines.append(f"      {'✓' if check.caught else '✗'} {check.what}{change}")
+        if result.broken:
+            lines.append(f"      ! {result.broken}")
         if result.error:
             lines.append(f"      ! 这条没跑起来（退出码 {result.exit_code}）：{result.error}")
         lines.append("")
 
     lines.append("─" * 60)
+    if report.broken:
+        lines.append(
+            f"⚠ 有 {len(report.broken)} 条用例本身坏了（{'、'.join(report.broken)}）——"
+            "它们的分数不能当成模型表现。"
+        )
     lines.append(f"总计  抓到 {report.caught}/{report.total}")
     if report.spend is not None:
         lines.append(f"花费  ${report.spend:.2f}")
