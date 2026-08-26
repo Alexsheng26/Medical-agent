@@ -947,6 +947,19 @@ def cmd_web(args, cfg: Config) -> int:
     return webui.serve(cfg, port=args.port, open_browser=not args.no_open)
 
 
+def _eval_progress(case) -> None:
+    """Overwrite in place on a terminal, one line per case when redirected.
+
+    A carriage return into a file leaves every case on one smeared line, which
+    is exactly where these runs get read from — they take minutes, so they get
+    backgrounded.
+    """
+    if sys.stdout.isatty():
+        print(f"  跑 {case['id']} …".ljust(46), end="\r", flush=True)
+    else:
+        print(f"  跑 {case['id']} …", flush=True)
+
+
 def cmd_eval(args, cfg: Config) -> int:
     """Run the cases whose defects are known, and report what was missed."""
     from . import evaluation
@@ -974,9 +987,10 @@ def cmd_eval(args, cfg: Config) -> int:
         cfg,
         free_only=args.free_only,
         only=args.only or "",
-        on_case=lambda case: print(f"  跑 {case['id']} …".ljust(46), end="\r", flush=True),
+        on_case=_eval_progress,
     )
-    print(" " * 46, end="\r")
+    if sys.stdout.isatty():
+        print(" " * 46, end="\r")
     print(evaluation.format_report(report, baseline, show_misses=args.show))
 
     if args.output:
