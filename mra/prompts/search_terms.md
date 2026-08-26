@@ -17,8 +17,13 @@ Rules:
 - Include obvious synonyms and the alternative spelling a journal might use
   (`NASH` and `MASH`; `tumour` and `tumor`).
 - 5 to 15 terms. Multi-word terms are fine and usually better.
-- If the question is already in English, return its content words — this costs
-  nothing and keeps the caller simple.
+- **If the question is already in English, do not echo it back.** You are
+  called in that case only when the literal wording under-retrieved, which
+  means the papers use different words. Give the ones the question did not:
+  the symbol for a named protein, the expansion for an abbreviation, the term
+  of art for a description (`myofibroblast` for "scar-forming cells", `SASP`
+  for "senescence"), and the alternative a journal might prefer. Repeating the
+  question's own words retrieves exactly what was already found.
 - If the question carries no searchable subject at all (pure pleasantries, or a
   question about the tool itself rather than about science), return an empty
   list rather than inventing a topic. A wrong topic is worse than no topic: it

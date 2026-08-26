@@ -34,6 +34,10 @@ def english_terms(cfg, llm, query: str) -> str:
     from . import prompts
     from .schemas import SearchTerms
 
+    # Reading the result is inside the guard, not after it. The call succeeding
+    # is not the same as the result being usable — a provider that answers with
+    # the wrong shape used to take the whole command down from a helper whose
+    # entire contract is to degrade quietly.
     try:
         result = llm.parse(
             [prompts.load("search_terms", question=query)],
@@ -42,10 +46,10 @@ def english_terms(cfg, llm, query: str) -> str:
             max_tokens=1000,
             effort="low",
         )
+        return " ".join(result.terms)
     except Exception as exc:  # noqa: BLE001 - a failed helper must not lose the turn
-        log.warning("Could not derive English search terms (%s); searching as typed.", exc)
+        log.warning("Could not derive search terms (%s); searching as typed.", exc)
         return ""
-    return " ".join(result.terms)
 
 
 def build_context(
@@ -70,14 +74,31 @@ def build_context(
     The header says which of the three happened, so the model knows whether
     relevance was established, guessed at, or merely recency.
     """
-    search_query = query
-    if llm is not None and cfg is not None and needs_translation(query):
-        # Appended, not substituted: gene symbols and journal names the
-        # researcher typed are usually better search terms than any paraphrase.
-        if terms := english_terms(cfg, llm, query):
-            search_query = f"{query} {terms}"
+    literal = store.search(query, limit=k) if not needs_translation(query) else []
+    expanded_with = ""
 
-    hits = store.search(search_query, limit=k)
+    # Expand when the literal query left room: a non-Latin question scores zero
+    # on an English corpus, and a Latin one that came back short is asking about
+    # something the corpus names differently — senescence when the papers say
+    # SASP, scar-forming cells when they say myofibroblast.
+    #
+    # Merged literal-first, so expansion can only add at the tail. Substituting
+    # or blending the queries would let synonyms outrank the terms the
+    # researcher actually typed, which are usually the better ones.
+    # Under-retrieval is relative to what exists: a library of eight can never
+    # return twelve, and expanding on every query there would buy terms forever
+    # for a corpus already returned whole.
+    room = min(k, store.count_articles())
+    if llm is not None and cfg is not None and len(literal) < room:
+        if terms := english_terms(cfg, llm, query):
+            expanded_with = terms
+            seen = {article.pmid for article, _ in literal}
+            for article, score in store.search(f"{query} {terms}", limit=k):
+                if article.pmid not in seen:
+                    literal.append((article, score))
+                    seen.add(article.pmid)
+
+    hits = literal[:k]
 
     if hits:
         articles = [article for article, _score in hits]
@@ -85,6 +106,12 @@ def build_context(
             f"{len(articles)} papers retrieved from the local knowledge base. "
             "These are the only papers you may cite.\n"
         )
+        if expanded_with:
+            header += (
+                "The literal question under-matched, so retrieval also searched "
+                f"for: {expanded_with}. Papers found only that way are further "
+                "down the list and may be less on-point.\n"
+            )
     else:
         articles = store.recent_articles(limit=k)
         if not articles:

@@ -310,14 +310,93 @@ class TestCrossLanguageRetrieval:
         assert "31234567" in pmids
         assert "matched nothing" not in context, "this is a real match, not a fallback"
 
-    def test_english_question_does_not_buy_translation(self, store, tmp_path):
+    def test_no_expansion_when_literal_retrieval_already_found_everything(
+        self, store, tmp_path
+    ):
+        """The trigger is under-retrieval, not language.
+
+        This used to assert "no call when the question is in English", which
+        left an English question whose wording differs from the corpus —
+        fibrosis where the paper says fibrogenesis — retrieving less than it
+        could. What matters is whether anything was left behind.
+        """
         from mra.config import Config
 
         llm = self.TermsLLM(["unused"])
+        # Reaches both stored papers, so there is nothing for terms to add.
         retrieval.build_context(
-            store, "macrophage fibrosis TGF", cfg=Config(workspace=tmp_path), llm=llm
+            store, "portal fibrosis myeloid stellate Kupffer",
+            cfg=Config(workspace=tmp_path), llm=llm,
         )
-        assert llm.calls == 0, "no call when the query is already searchable"
+        assert llm.calls == 0
+
+    def test_an_english_question_that_under_matches_does_expand(self, store, tmp_path):
+        """The paper the literal wording missed is the whole point."""
+        from mra.config import Config
+
+        llm = self.TermsLLM(["stellate", "Kupffer"])
+        _context, pmids = retrieval.build_context(
+            store, "portal fibrosis myeloid", cfg=Config(workspace=tmp_path), llm=llm
+        )
+        assert llm.calls == 1
+        assert "28001122" in pmids, "the paper using other words should be reachable"
+
+    def test_literal_matches_keep_their_places(self, store, tmp_path):
+        """Expansion adds at the tail. Letting a synonym outrank a term the
+        researcher typed trades precision for recall in the wrong direction."""
+        from mra.config import Config
+
+        llm = self.TermsLLM(["stellate", "Kupffer"])
+        _context, pmids = retrieval.build_context(
+            store, "portal fibrosis myeloid", cfg=Config(workspace=tmp_path), llm=llm
+        )
+        assert pmids[0] == "31234567"
+
+    def test_the_header_says_when_retrieval_was_widened(self, store, tmp_path):
+        """Otherwise a loosely-matched paper reads as on-point as a direct hit."""
+        from mra.config import Config
+
+        llm = self.TermsLLM(["stellate", "Kupffer"])
+        context, _pmids = retrieval.build_context(
+            store, "portal fibrosis myeloid", cfg=Config(workspace=tmp_path), llm=llm
+        )
+        assert "under-matched" in context
+        assert "stellate" in context
+
+    def test_an_empty_library_buys_no_terms(self, tmp_path):
+        """min(k, 0) is 0, so nothing is under-retrieved and nothing is spent."""
+        from mra.config import Config
+        from mra.store import Store as _Store
+
+        llm = self.TermsLLM(["unused"])
+        with _Store(tmp_path / "empty.db") as empty:
+            retrieval.build_context(
+                empty, "anything at all", cfg=Config(workspace=tmp_path), llm=llm
+            )
+        assert llm.calls == 0
+
+    def test_a_wrong_shaped_answer_degrades_like_a_failed_call(self, store, tmp_path):
+        """Succeeding and being usable are different things.
+
+        The guard used to cover the call but not the reading of its result, so
+        a provider answering with the wrong shape took the whole command down —
+        from a helper whose entire job is to fail quietly.
+        """
+        from mra.config import Config
+
+        class WrongShape:
+            def parse(self, *a, **k):
+                return object()  # no `.terms`
+
+            def text(self, *a, **k):  # pragma: no cover
+                raise AssertionError("not reached")
+
+        context, pmids = retrieval.build_context(
+            store, "portal fibrosis myeloid",
+            cfg=Config(workspace=tmp_path), llm=WrongShape(),
+        )
+        assert pmids == ["31234567"], "the literal hit survives the broken helper"
+        assert "under-matched" not in context
 
     def test_a_failed_translation_degrades_to_the_fallback(self, store, tmp_path):
         """A helper that cannot run must not cost the researcher their turn."""
