@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS chat (
     created_at  TEXT NOT NULL
 );
 
+-- What the conversation said before it fell out of the model's window. Without
+-- this, turn 21 silently forgets why turn 3 ruled out a pathway — and nobody
+-- can notice a loss they were never told about.
+CREATE TABLE IF NOT EXISTS chat_summary (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    upto_id     INTEGER NOT NULL,   -- highest chat.id this summary covers
+    content     TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+
 -- Saved searches replayed by `mra sync`. The resolved query is stored, not the
 -- original topic: an unattended run must not re-plan the query each time, or it
 -- costs a model call per run and the search scope drifts without anyone seeing.
@@ -315,8 +325,42 @@ class Store:
         ).fetchall()
         return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
+    def count_chat(self) -> int:
+        return self.conn.execute("SELECT COUNT(*) FROM chat").fetchone()[0]
+
+    def chat_before(self, limit: int, after_id: int = 0) -> list[dict[str, str]]:
+        """The messages that fall outside the most recent `limit`.
+
+        Used to fold what is about to drop out of the window into a summary
+        rather than letting it vanish.
+        """
+        cutoff = self.conn.execute(
+            "SELECT id FROM chat ORDER BY id DESC LIMIT 1 OFFSET ?", (limit - 1,)
+        ).fetchone()
+        if cutoff is None:
+            return []
+        rows = self.conn.execute(
+            "SELECT id, role, content FROM chat WHERE id < ? AND id > ? ORDER BY id",
+            (cutoff[0], after_id),
+        ).fetchall()
+        return [{"id": r["id"], "role": r["role"], "content": r["content"]} for r in rows]
+
+    def save_chat_summary(self, upto_id: int, content: str) -> None:
+        self.conn.execute(
+            "INSERT INTO chat_summary (upto_id, content, created_at) VALUES (?,?,?)",
+            (upto_id, content, _now()),
+        )
+        self.conn.commit()
+
+    def chat_summary(self) -> tuple[int, str] | None:
+        row = self.conn.execute(
+            "SELECT upto_id, content FROM chat_summary ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return (row["upto_id"], row["content"]) if row else None
+
     def clear_chat(self) -> None:
         self.conn.execute("DELETE FROM chat")
+        self.conn.execute("DELETE FROM chat_summary")
         self.conn.commit()
 
 

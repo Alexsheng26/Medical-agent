@@ -214,6 +214,10 @@ def _store(cfg: Config) -> Store:
 
 CONFIRM_ABOVE = 1.00
 
+# Prefix for lines that are the tool talking, not the model. The browser routes
+# them out of the reply; in a terminal they read as an aside either way.
+NOTICE = "⟨系统⟩ "
+
 
 def _confirm_spend(estimate: float | None, args) -> bool:
     """Ask before a large spend. Returns False when the researcher declines.
@@ -355,7 +359,15 @@ def cmd_status(args, cfg: Config) -> int:
         print(f"Hypotheses    {len(store.list_hypotheses())}")
         if latest:
             print(f"  latest v{latest[0]}: {latest[1].get('title', '')}")
-        print(f"Chat turns    {len(store.chat_history(limit=10_000))}")
+        turns = len(store.chat_history(limit=10_000))
+        summary = store.chat_summary()
+        note = ""
+        if summary:
+            # Say it here too: someone checking status after a long session
+            # should not have to infer that part of it now lives as a summary.
+            covered = sum(1 for m in store.chat_before(10_000) if m["id"] <= summary[0])
+            note = f"（其中最早 {covered} 条已折成摘要）"
+        print(f"Chat turns    {turns}{note}")
     return 0
 
 
@@ -602,8 +614,21 @@ def cmd_chat(args, cfg: Config) -> int:
             print("Conversation cleared.")
             return 0
 
+        def turn(message: str) -> str:
+            # Fold before answering, so this turn already sees the summary
+            # rather than losing the oldest messages to make room for itself.
+            folded = dialogue.fold_older_turns(cfg, store, llm)
+            if folded:
+                # Marked, because stderr is merged into stdout for the browser
+                # and an unmarked notice lands inside the model's reply bubble —
+                # the same mistake `draft` avoids by keeping its warnings off
+                # the manuscript.
+                print(f"{NOTICE}更早的 {folded} 条已折进摘要，排除过的方向不会丢",
+                      file=sys.stderr)
+            return dialogue.respond(cfg, store, llm, message)
+
         if args.message:
-            print(dialogue.respond(cfg, store, llm, args.message))
+            print(turn(args.message))
             return 0
 
         print("Interactive session. Blank line or Ctrl-D to exit.\n")
@@ -615,7 +640,7 @@ def cmd_chat(args, cfg: Config) -> int:
             if not message:
                 break
             print()
-            print(dialogue.respond(cfg, store, llm, message))
+            print(turn(message))
             print()
     return 0
 

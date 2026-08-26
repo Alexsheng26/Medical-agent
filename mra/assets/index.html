@@ -525,7 +525,14 @@ function renderChat(panel) {
 
     const source = new EventSource(`/api/stream?job=${encodeURIComponent(job.job)}&t=${encodeURIComponent(TOKEN)}`);
     source.addEventListener("line", event => {
-      collected += JSON.parse(event.data).text + "\n";
+      const line = JSON.parse(event.data).text;
+      // Lines the tool emits about itself do not belong in the model's bubble.
+      if (line.startsWith("⟨系统⟩")) {
+        status.className = "status";
+        status.textContent = line.replace("⟨系统⟩", "").trim();
+        return;
+      }
+      collected += line + "\n";
       reply.textContent = collected.trim();
     });
     source.addEventListener("done", event => {

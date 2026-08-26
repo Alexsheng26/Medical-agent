@@ -4,11 +4,60 @@ from __future__ import annotations
 
 import json
 
+import logging
+
 from . import citations, prompts, retrieval
 from .config import Config
 from .llm import LLM
 from .schemas import Hypothesis
 from .store import Store
+
+log = logging.getLogger(__name__)
+
+
+# Messages (not turns) kept verbatim. Everything older is folded into a running
+# summary instead of being dropped, and the fold only happens once enough has
+# accumulated to be worth a call.
+CHAT_WINDOW = 40
+FOLD_WHEN = 10
+
+
+def fold_older_turns(cfg: Config, store: Store, llm: LLM) -> int:
+    """Compress whatever has fallen outside the window into the running summary.
+
+    Returns how many messages were folded, 0 when nothing was due.
+
+    The truncation this replaces was silent: turn 21 simply stopped being able
+    to see turn 3, so the dialogue would re-propose a mechanism it had already
+    ruled out and the researcher had no way to know why. A loss nobody is told
+    about is worse than a smaller window nobody minds.
+    """
+    existing = store.chat_summary()
+    covered = existing[0] if existing else 0
+    pending = store.chat_before(CHAT_WINDOW, after_id=covered)
+    if len(pending) < FOLD_WHEN:
+        return 0
+
+    transcript = "\n\n".join(
+        f"{'研究者' if m['role'] == 'user' else '助手'}：{m['content']}" for m in pending
+    )
+    try:
+        result = llm.text(
+            [prompts.load(
+                "chat_summary",
+                language="中文" if cfg.chat_language == "zh" else "English",
+                previous=existing[1] if existing else "（无）",
+                messages=transcript,
+            )],
+            [{"role": "user", "content": "Produce the combined summary."}],
+            max_tokens=2000,
+        )
+    except Exception as exc:  # noqa: BLE001 — losing the fold must not lose the turn
+        log.warning("Could not summarise earlier turns (%s); keeping them out of context.", exc)
+        return 0
+
+    store.save_chat_summary(pending[-1]["id"], result.text.strip())
+    return len(pending)
 
 
 def respond(cfg: Config, store: Store, llm: LLM, message: str) -> str:
@@ -22,11 +71,18 @@ def respond(cfg: Config, store: Store, llm: LLM, message: str) -> str:
 
     context, _pmids = retrieval.build_context(store, query, k=cfg.retrieval_k, cfg=cfg, llm=llm)
 
+    earlier = store.chat_summary()
     system = [
         prompts.core(cfg.chat_language),
         prompts.load("dialogue", context=context),
     ]
-    history = store.chat_history()
+    if earlier:
+        system.append(
+            "以下是本次对话更早部分的摘要。它不是文献，是这场讨论自己的结论——"
+            "特别是已经排除掉的方向和排除的理由，不要重新提出来。\n\n" + earlier[1]
+        )
+
+    history = store.chat_history(limit=CHAT_WINDOW)
     history.append({"role": "user", "content": message})
 
     # The dialogue block carries this turn's retrieval context; only the
