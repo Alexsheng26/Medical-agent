@@ -1,0 +1,145 @@
+{
+  "model": "claude-opus-5",
+  "provider": "anthropic",
+  "spend": 0.71775975,
+  "caught": 18,
+  "total": 18,
+  "results": [
+    {
+      "id": "refs-forgery",
+      "command": "refs",
+      "exit_code": 1,
+      "checks": [
+        {
+          "id": "catches-fake-pmid",
+          "what": "抓出库里不存在的 PMID",
+          "caught": true
+        },
+        {
+          "id": "catches-fake-local",
+          "what": "抓出伪造的 local: 标记",
+          "caught": true
+        },
+        {
+          "id": "keeps-real-one",
+          "what": "真实存在的那条不误报",
+          "caught": true
+        }
+      ]
+    },
+    {
+      "id": "lint-ai-tells",
+      "command": "lint",
+      "exit_code": 0,
+      "checks": [
+        {
+          "id": "flags-stock-phrases",
+          "what": "抓出套话开头",
+          "caught": true
+        },
+        {
+          "id": "flags-uniformity",
+          "what": "抓出句长方差过低或段落过于均匀",
+          "caught": true
+        }
+      ]
+    },
+    {
+      "id": "digest-cross-sectional",
+      "command": "import",
+      "exit_code": 0,
+      "checks": [
+        {
+          "id": "causal-overreach",
+          "what": "指出横断面设计撑不起 leads to / drives 的因果表述",
+          "caught": true
+        },
+        {
+          "id": "reverse-causation",
+          "what": "提出反向因果或共同处置的可能",
+          "caught": true
+        },
+        {
+          "id": "no-effect-sizes",
+          "what": "指出摘要里没有效应量 / 置信区间 / p 值",
+          "caught": true
+        },
+        {
+          "id": "in-silico-only",
+          "what": "指出机制部分全是计算的，对接不能证明通路激活",
+          "caught": true
+        },
+        {
+          "id": "unexplained-sex-split",
+          "what": "对性别相反的结果提出实质批评（无解释 / 算术上讲不通 / 缺交互检验）",
+          "caught": true
+        },
+        {
+          "id": "single-timepoint",
+          "what": "指出单次采样 / 单时点测量的局限",
+          "caught": true
+        }
+      ]
+    },
+    {
+      "id": "figures-planted-mismatch",
+      "command": "figures",
+      "exit_code": 0,
+      "checks": [
+        {
+          "id": "notes-data-mismatch",
+          "what": "发现说明里的数字在数据文件里不存在",
+          "caught": true
+        },
+        {
+          "id": "caption-needs-n",
+          "what": "要求图注写清 n / 检验方法 / 误差棒",
+          "caught": true
+        },
+        {
+          "id": "table-not-figure",
+          "what": "指出有内容该做成表而不是占正文图位",
+          "caught": true
+        }
+      ]
+    },
+    {
+      "id": "assess-honest-ceiling",
+      "command": "assess",
+      "exit_code": 0,
+      "checks": [
+        {
+          "id": "no-causal-experiment",
+          "what": "指出缺乏遗传学或干预实验，因此只能到相关层面",
+          "caught": true
+        },
+        {
+          "id": "single-centre",
+          "what": "指出单中心、无外部队列验证",
+          "caught": true
+        },
+        {
+          "id": "in-vitro-limits",
+          "what": "指出体外部分是细胞系、n=3 的局限",
+          "caught": true
+        },
+        {
+          "id": "names-candidate-journals",
+          "what": "推荐模式产出了冲刺/现实/稳妥的分档，而不是泛泛而谈",
+          "caught": true
+        }
+      ]
+    }
+  ],
+  "_about": [
+    "claude-opus-5（effort=high）在 2026-08 跑出来的参考基线，18/18，$0.72。",
+    "仓库自带它，是为了让你换模型时不必先花钱跑一遍自己的基线：",
+    "  MRA_PROVIDER=openai mra eval --baseline mra/evals/baseline-claude-opus-5.json",
+    "",
+    "两条注意：",
+    "1. 满分意味着这套用例对 Claude 已经饱和——它现在只能发现退步，发现不了进步。",
+    "   如果 DeepSeek 也是 18/18，说明用例太容易，需要加更难的，而不是说明两者一样好。",
+    "2. 这份没有存 output（跑的时候存输出那个改动还没生效）。要看原文自己跑一次带 --show。"
+  ],
+  "_recorded": "2026-08"
+}

@@ -231,3 +231,42 @@ class TestSavedBaseline:
         result.broken = "用例本身没产出可检查的内容"
         saved = evaluation.to_json(evaluation.Report(results=[result]))
         assert saved["results"][0]["broken"]
+
+
+class TestPartialComparison:
+    """A run covering fewer cases than the baseline is not a regression.
+
+    `--free-only` against a full baseline reported "差了 13 条" — thirteen
+    catastrophic regressions manufactured by the comparison itself, from cases
+    that simply had not been run.
+    """
+
+    def _report(self, ids_and_caught):
+        return evaluation.Report(results=[
+            evaluation.Result(case, "x", "w", checks=[evaluation.Check("e", "w", caught)])
+            for case, caught in ids_and_caught
+        ])
+
+    def test_uncovered_cases_are_not_counted_as_lost(self):
+        full = evaluation.to_json(self._report([("a", True), ("b", True), ("c", True)]))
+        text = evaluation.format_report(self._report([("a", True)]), baseline=full)
+        assert "持平" in text
+        assert "另有 2 条这次没跑" in text
+        assert "差了" not in text
+
+    def test_a_real_regression_within_the_overlap_still_shows(self):
+        full = evaluation.to_json(self._report([("a", True), ("b", True)]))
+        text = evaluation.format_report(self._report([("a", False)]), baseline=full)
+        assert "差了 1 条" in text
+
+    def test_no_overlap_says_so_rather_than_inventing_a_number(self):
+        full = evaluation.to_json(self._report([("a", True)]))
+        text = evaluation.format_report(self._report([("z", True)]), baseline=full)
+        assert "没有重叠" in text
+
+    def test_the_tail_still_prints_when_there_is_no_overlap(self):
+        """The early return must not swallow the caveat and the miss list."""
+        full = evaluation.to_json(self._report([("a", True)]))
+        text = evaluation.format_report(self._report([("z", False)]), baseline=full)
+        assert "没抓到的" in text
+        assert "判断质量" in text

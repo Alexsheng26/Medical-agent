@@ -286,10 +286,26 @@ def format_report(
         lines.append(f"花费  ${report.spend:.2f}")
 
     if previous:
-        before = sum(1 for value in previous.values() if value)
+        # Only the expectations this run actually covered. Comparing a
+        # --free-only run against a full baseline otherwise reports the thirteen
+        # cases that were never run as thirteen regressions — a catastrophic
+        # number produced entirely by the comparison.
+        ran = {
+            (result.id, check.id)
+            for result in report.results
+            for check in result.checks
+        }
+        overlap = {key: value for key, value in previous.items() if key in ran}
+        if not overlap:
+            lines.append("对比基线  没有重叠的用例，无法比较")
+            return _finish(lines, report)
+
+        before = sum(1 for value in overlap.values() if value)
+        skipped = len(previous) - len(overlap)
         delta = report.caught - before
         arrow = "持平" if delta == 0 else (f"好了 {delta} 条" if delta > 0 else f"差了 {-delta} 条")
-        lines.append(f"对比基线  {before} → {report.caught}（{arrow}）")
+        note = f"，基线里另有 {skipped} 条这次没跑" if skipped else ""
+        lines.append(f"对比基线  {before} → {report.caught}（{arrow}）{note}")
 
     if show_misses:
         for result in report.results:
@@ -300,6 +316,10 @@ def format_report(
             lines.append(result.output.strip())
             lines.append("─" * 50)
 
+    return _finish(lines, report)
+
+
+def _finish(lines: list[str], report: Report) -> str:
     missed = [
         (r.id, c.what) for r in report.results for c in r.checks if not c.caught
     ]
