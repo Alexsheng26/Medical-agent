@@ -216,3 +216,18 @@ class TestBrokenCases:
         for case in evaluation.load_cases():
             if case["needs_model"]:
                 assert case.get("sanity"), case["id"]
+
+
+class TestSavedBaseline:
+    def test_the_saved_run_keeps_what_was_actually_said(self):
+        """Pass/fail alone cannot answer "what did it say" three weeks later."""
+        result = evaluation.Result("c", "import", "w", output="局限\n  存在反向因果")
+        result.checks = [evaluation.Check("e", "what", True)]
+        saved = evaluation.to_json(evaluation.Report(results=[result]))
+        assert "反向因果" in saved["results"][0]["output"]
+
+    def test_a_broken_flag_survives_the_round_trip(self):
+        result = evaluation.Result("c", "digest", "w")
+        result.broken = "用例本身没产出可检查的内容"
+        saved = evaluation.to_json(evaluation.Report(results=[result]))
+        assert saved["results"][0]["broken"]

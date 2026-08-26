@@ -330,6 +330,11 @@ def to_json(report: Report) -> dict[str, Any]:
                 "id": result.id,
                 "command": result.command,
                 "exit_code": result.exit_code,
+                # The output travels with the scores. A baseline that records
+                # only pass/fail cannot answer the question you have three weeks
+                # later — not "did it catch this" but "what did it say".
+                "output": result.output,
+                "broken": result.broken,
                 "checks": [
                     {"id": check.id, "what": check.what, "caught": check.caught}
                     for check in result.checks
