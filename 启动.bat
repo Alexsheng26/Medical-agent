@@ -90,10 +90,20 @@ echo   [X] 找不到可用的 Python 解释器路径，无法继续。
 goto :halt
 :run_ok
 
+REM Checked from somewhere else on purpose. Python puts the current directory
+REM on sys.path, and this one holds the `mra` package folder, so `import mra`
+REM succeeds on a brand-new virtualenv where nothing is installed at all. The
+REM launcher then skipped the install, announced the environment was ready, and
+REM every menu item failed with "No module named mra" the moment pushd moved
+REM off this folder.
+
+pushd "%TEMP%"
 "%RUN%" -c "import mra" >nul 2>&1
-if not errorlevel 1 goto :deps_ok
+set "MRAOK=%errorlevel%"
+popd
+if "%MRAOK%"=="0" goto :deps_ok
 echo   [..] 正在安装依赖（首次约 2 分钟，需要联网）
-"%RUN%" -m pip install --disable-pip-version-check -q %PIPFLAGS% -e .
+"%RUN%" -m pip install --disable-pip-version-check -q %PIPFLAGS% -e "%~dp0."
 if not errorlevel 1 goto :deps_ok
 echo   [X] 依赖安装失败。最常见原因是网络不通，或公司/学校网络拦截了 pypi。
 echo       试试国内镜像 —— 把下面这一整行复制到本窗口里回车：
@@ -255,10 +265,9 @@ echo   没有这个选项，请重新选。
 goto :menu
 
 :do_web
-echo.
-echo   正在启动网页界面，浏览器会自动打开。
-echo   界面只在这台电脑上，别人访问不到。
-echo   要停下来回到这个菜单，在本窗口按 Ctrl-C。
+REM No explanatory echoes here: `mra web` prints the address, the loopback-only
+REM note and how to stop, and cmd mangled this run of Chinese lines into a
+REM "is not recognized as an internal or external command" error.
 echo.
 "%RUN%" -m mra %PROJARG% web
 goto :after

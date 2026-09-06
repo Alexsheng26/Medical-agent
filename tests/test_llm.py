@@ -8,9 +8,16 @@ fallback beta — without needing an API key or spending a call.
 import json
 
 import anthropic
-import httpx
 import pytest
 from pydantic import BaseModel
+
+# The SDK moved from httpx to httpx2 and rejects a client from the other one by
+# name. Follow whichever it was built against rather than pinning the SDK back:
+# these tests check the request we put on the wire, not the transport library.
+try:  # pragma: no cover - depends on the installed SDK
+    import httpx2 as httpx
+except ImportError:  # pragma: no cover
+    import httpx
 
 from mra.config import Config
 from mra.llm import LLM, RefusalError, system_blocks

@@ -185,3 +185,21 @@ def test_deepseek_branch_sets_every_variable_the_backend_reads(raw: str):
             f"{variable} not set in-process — setx does not affect the current window, "
             "which is the whole reason this block exists"
         )
+
+
+def test_the_install_check_does_not_run_from_the_repository(raw: str):
+    """`python -c "import mra"` from the repo root always succeeds.
+
+    The repository root holds the `mra` package folder and Python puts the
+    current directory on sys.path, so the check passed on a brand-new empty
+    virtualenv. The launcher skipped the install, announced the environment was
+    ready, and every menu item then failed with "No module named mra" once
+    pushd moved off that folder.
+    """
+    block = raw[raw.index('"%RUN%" -c "import mra"') - 400 : raw.index('"%RUN%" -c "import mra"')]
+    assert "pushd" in block, "the import check still runs from the repository root"
+
+
+def test_the_editable_install_names_its_target(raw: str):
+    """`-e .` depends on the current directory being the repository."""
+    assert '-e "%~dp0."' in raw

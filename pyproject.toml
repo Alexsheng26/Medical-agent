@@ -1,11 +1,15 @@
 [project]
 name = "medical-research-agent"
-version = "0.7.1"
+version = "0.7.2"
 description = "Research intermediary agent for clinical and translational medicine"
 requires-python = ">=3.10"
 dependencies = [
     "anthropic>=0.120",
     "pypdf>=4.0",
+    # mra/pubmed.py imports this directly. It used to arrive through the
+    # Anthropic SDK, which has since moved to httpx2 — so a fresh install got
+    # no httpx at all and `mra search` died on an import.
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
