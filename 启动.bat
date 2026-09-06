@@ -32,17 +32,7 @@ if defined PYVER set "PYEXE=python"
 :py_found
 
 if defined PYEXE goto :py_ok
-echo   [X] 没有找到可用的 Python。
-echo.
-echo   注意：如果你刚才敲 python 时"什么都没显示、也没报错"，
-echo   那不是装好了 —— Windows 自带一个指向应用商店的假 python，
-echo   没装 Python 时敲它会静默跳转商店，每条命令都零输出零报错。
-echo.
-echo   请这样做：
-echo     1. 打开 https://www.python.org/downloads/ 下载安装包
-echo     2. 安装第一屏务必勾上 "Add python.exe to PATH"（在窗口最下面）
-echo     3. 装完关掉所有命令行窗口，重新双击本文件
-echo.
+type "%~dp0messages\no_python.txt"
 start "" "https://www.python.org/downloads/"
 goto :halt
 :py_ok
@@ -63,6 +53,24 @@ REM machine and `mra` never has to be found on PATH — everything downstream is
 REM invoked as `"%RUN%" -m mra`, and %RUN% is an absolute interpreter path
 REM whichever branch below set it.
 
+REM Windows caps a single path at 260 characters. site-packages adds around
+REM 150 on top of this folder, and one anthropic filename alone is 60 — so a
+REM long folder here fails half way through pip with an error that reads like
+REM a missing file. Cheaper to say so before the three-minute install than
+REM after it.
+REM The path goes in as an argument, not inside the -c string: cmd does not
+REM understand \" escaping, and %~dp0 ends in a backslash, which would escape
+REM the closing quote and hand Python a mangled path.
+for /f %%n in ('%PYEXE% -c "import sys;print(len(sys.argv[1]))" "%~dp0." 2^>nul') do set "PATHLEN=%%n"
+if not defined PATHLEN goto :path_ok
+if %PATHLEN% LEQ 80 goto :path_ok
+echo.
+type "%~dp0messages\long_path.txt"
+echo   （当前路径 %PATHLEN% 个字符：%~dp0）
+echo.
+pause
+:path_ok
+
 if exist "%VENVPY%" goto :venv_ready
 echo   [..] 首次运行，正在创建独立运行环境（约 1 分钟）
 %PYEXE% -m venv "%~dp0.venv"
@@ -73,9 +81,7 @@ REM block (WinError 5). That is not a reason to stop: installing into the user
 REM directory copies no interpreter and reaches the same place.
 
 echo.
-echo   [!] 独立运行环境建不起来。最常见的是杀毒软件拦住了复制 python.exe，
-echo       其次是这个盘/文件夹不让写（报 WinError 5 拒绝访问）。
-echo       不影响使用 —— 改成装到你的用户目录下，功能完全一样。
+type "%~dp0messages\venv_failed.txt"
 echo.
 for /f "delims=" %%p in ('%PYEXE% -c "import sys;print(sys.executable)" 2^>nul') do set "RUN=%%p"
 set "PIPFLAGS=--user"
@@ -105,8 +111,7 @@ if "%MRAOK%"=="0" goto :deps_ok
 echo   [..] 正在安装依赖（首次约 2 分钟，需要联网）
 "%RUN%" -m pip install --disable-pip-version-check -q %PIPFLAGS% -e "%~dp0."
 if not errorlevel 1 goto :deps_ok
-echo   [X] 依赖安装失败。最常见原因是网络不通，或公司/学校网络拦截了 pypi。
-echo       试试国内镜像 —— 把下面这一整行复制到本窗口里回车：
+type "%~dp0messages\deps_failed.txt"
 echo       "%RUN%" -m pip install %PIPFLAGS% -e "%~dp0." -i https://pypi.tuna.tsinghua.edu.cn/simple
 goto :halt
 :deps_ok

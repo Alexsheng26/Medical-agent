@@ -1,0 +1,10 @@
+  [X] 没有找到可用的 Python。
+
+  注意：如果你刚才敲 python 时"什么都没显示、也没报错"，
+  那不是装好了 —— Windows 自带一个指向应用商店的假 python，
+  没装 Python 时敲它会静默跳转商店，每条命令都零输出零报错。
+
+  请这样做：
+    1. 打开 https://www.python.org/downloads/ 下载安装包
+    2. 安装第一屏务必勾上 "Add python.exe to PATH"（在窗口最下面）
+    3. 装完关掉所有命令行窗口，重新双击本文件

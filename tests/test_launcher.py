@@ -203,3 +203,30 @@ def test_the_install_check_does_not_run_from_the_repository(raw: str):
 def test_the_editable_install_names_its_target(raw: str):
     """`-e .` depends on the current directory being the repository."""
     assert '-e "%~dp0."' in raw
+
+
+def test_every_message_file_the_launcher_types_exists(raw: str):
+    """`type` on a missing file prints an error where the explanation should be."""
+    for name in re.findall(r'type "%~dp0messages\\(\S+?)"', raw):
+        assert (LAUNCHER.parent / "messages" / name).is_file(), name
+
+
+def test_message_files_carry_no_byte_order_mark():
+    """cmd's `type` prints a BOM as ï»¿ at the top of the message."""
+    for path in (LAUNCHER.parent / "messages").glob("*.txt"):
+        assert not path.read_bytes().startswith(b"\xef\xbb\xbf"), path.name
+
+
+def test_message_files_are_all_referenced():
+    """An orphaned message is one nobody will notice has gone stale."""
+    raw = LAUNCHER.read_bytes().decode("utf-8")
+    for path in (LAUNCHER.parent / "messages").glob("*.txt"):
+        assert path.name in raw, f"{path.name} is never shown"
+
+
+def test_the_long_path_check_passes_the_path_as_an_argument(raw: str):
+    """cmd does not understand \\" escaping, and %~dp0 ends in a backslash that
+    would escape the closing quote and hand Python a mangled path."""
+    line = next(line for line in raw.split("\r\n") if "sys.argv[1]" in line)
+    assert '"%~dp0."' in line
+    assert '\\"' not in line
