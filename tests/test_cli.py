@@ -453,3 +453,54 @@ class TestDemoFiles:
         target = tmp_path / "elsewhere"
         assert run(["demo", "--to", str(target)], workspace) == 0
         assert (target / "demo_data.csv").is_file()
+
+
+class TestUnwritableWorkspace:
+    """A data folder that cannot be created is a setup problem, not a crash.
+
+    On a real Windows machine this surfaced as a traceback four frames deep in
+    pathlib ending in `PermissionError: [WinError 5] 拒绝访问`, printed instead
+    of the menu. The exception name is the one part of that the researcher
+    cannot act on.
+    """
+
+    def _refuse(self, monkeypatch, error):
+        def deny(self, *args, **kwargs):
+            raise error
+        monkeypatch.setattr(Config, "ensure_workspace", deny)
+
+    def test_a_permission_error_exits_cleanly_instead_of_raising(
+        self, workspace, monkeypatch, capsys
+    ):
+        self._refuse(monkeypatch, PermissionError(13, "拒绝访问。"))
+        assert run(["status"], workspace) == 1
+
+    def test_the_message_names_the_path_and_what_the_system_said(
+        self, workspace, monkeypatch, capsys
+    ):
+        self._refuse(monkeypatch, PermissionError(13, "拒绝访问。"))
+        run(["status"], workspace)
+        err = capsys.readouterr().err
+        assert str(workspace) in err
+        assert "拒绝访问" in err
+
+    def test_the_message_separates_the_two_causes(self, workspace, monkeypatch, capsys):
+        """Antivirus and an unwritable folder want opposite fixes, so the
+        message has to tell the researcher how to find out which one it is."""
+        self._refuse(monkeypatch, PermissionError(13, "拒绝访问。"))
+        run(["status"], workspace)
+        err = capsys.readouterr().err
+        assert "写得进去" in err and "写不进去" in err
+        assert "杀毒软件" in err
+        assert "test.txt" in err, "no way to tell the two apart"
+
+    def test_a_read_only_disk_is_covered_too(self, workspace, monkeypatch, capsys):
+        """Not every failure here is WinError 5."""
+        self._refuse(monkeypatch, OSError(30, "Read-only file system"))
+        assert run(["status"], workspace) == 1
+        assert "Read-only file system" in capsys.readouterr().err
+
+    def test_a_relative_workspace_still_names_a_real_folder(self):
+        """`--workspace .mra` has a parent of "." — not something to cd into."""
+        message = cli._cannot_make_workspace(Path(".mra"), PermissionError(13, "denied"))
+        assert "进这个文件夹：.mra" in message

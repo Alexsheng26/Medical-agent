@@ -126,7 +126,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     cfg = Config.load(workspace)
-    cfg.ensure_workspace()
+    try:
+        cfg.ensure_workspace()
+    except OSError as exc:
+        print(f"\n{_cannot_make_workspace(cfg.workspace, exc)}", file=sys.stderr)
+        return 1
 
     try:
         return _run(args, cfg)
@@ -161,6 +165,36 @@ def _run(args, cfg: Config) -> int:
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         return 130
+
+
+def _cannot_make_workspace(workspace: Path, exc: OSError) -> str:
+    """The data folder could not be created — say which two things cause it.
+
+    Observed on a researcher's Windows machine as a raw traceback four frames
+    deep in pathlib, ending in `PermissionError: [WinError 5] 拒绝访问`. That
+    names the exception and neither of its two causes, which want opposite
+    fixes: antivirus blocking the *program*, or a folder that is not writable
+    by *anyone*. One command tells them apart, so the message carries it.
+    """
+    # `--workspace .mra` leaves a parent of ".", which names nothing the
+    # researcher can `cd` into. Point at the workspace itself instead.
+    folder = workspace.parent if str(workspace.parent) not in (".", "") else workspace
+    return (
+        "建不了数据目录，所以这条命令没法开始。\n"
+        "\n"
+        f"  想建的位置：{workspace}\n"
+        f"  系统说：{exc.strerror or exc}\n"
+        "\n"
+        f"先分清是哪种。进这个文件夹：{folder}\n"
+        "试着写一个文件（Windows：echo test > test.txt；macOS/Linux：touch test.txt）\n"
+        "\n"
+        "  写得进去 → 是杀毒软件拦了「Python 建目录」这个动作，不是权限问题。\n"
+        "             360 / 火绒 / Defender 的文件夹保护最常干这个。把工具所在的\n"
+        "             文件夹加进白名单，或者把整个文件夹移到杀软不看的位置。\n"
+        "\n"
+        "  写不进去 → 是这个文件夹本身不可写：只读盘、网络盘、同步盘，或者解压时\n"
+        "             带进了受限权限。换一个你自己的目录重来，比如 C:\\mra。\n"
+    )
 
 
 def _report_usage(command: str) -> None:
