@@ -212,8 +212,16 @@ REM -------------------------------------------------------------- 工作目录
 REM The knowledge base lives beside this file rather than inside it, so the
 REM researcher's unpublished data never sits in the code folder.
 
-if not exist "%WORK%" mkdir "%WORK%"
-pushd "%WORK%"
+if not exist "%WORK%" mkdir "%WORK%" >nul 2>&1
+pushd "%WORK%" >nul 2>&1
+if not errorlevel 1 goto :work_ok
+echo.
+type "%~dp0messages\no_workspace.txt"
+echo   （想建的位置：%WORK%）
+echo.
+pause
+goto :halt
+:work_ok
 if exist ".mra" goto :inited
 echo.
 echo   首次初始化工作目录。
@@ -231,22 +239,7 @@ if defined PROJ echo   当前课题: %PROJ%
 if not defined PROJ echo   当前课题: 默认
 echo ============================================================
 echo.
-echo    1  网页界面      推荐 —— 在浏览器里操作，不用记命令
-echo.
-echo    2  导入并阅读    PDF / PubMed XML / 纯文本，读完直接出分析
-echo    3  提炼文献      逐篇结构化提炼（每篇一次调用）
-echo    4  科学对话      基于你的文献库追问
-echo    5  评估数据      打分 + 推荐候选期刊
-echo    6  文献列表      看库里有什么、每篇提炼出了什么（不花钱）
-echo    7  引用核对      检查文稿里的引用是否真实（不花钱）
-echo    8  试用示例      导入仓库自带的 8 篇示例文献
-echo    9  连接自检      模型连不通时先跑这个
-echo   10  打开数据目录
-echo   11  查看状态      文献数、假说、花费
-echo   12  更换 API key  换服务商，或换掉已经作废的 key
-echo   13  所有课题      横看每个课题走到哪一步（不花钱）
-echo   14  切换 / 新建课题
-echo    0  退出
+type "%~dp0messages\menu.txt"
 echo.
 set "CHOICE="
 set /p "CHOICE=请输入数字后回车: "

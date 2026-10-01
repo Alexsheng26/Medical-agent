@@ -99,17 +99,42 @@ def test_no_set_p_inside_a_parenthesised_block(lines: list[str]):
 
 
 def test_menu_digits_all_dispatch(lines: list[str]):
-    """Every number the menu offers has to go somewhere."""
-    offered = set()
-    for line in lines:
-        match = re.match(r"^echo\s+(\d+)\s+\S", line.strip())
-        if match:
-            offered.add(match.group(1))
+    """Every number the menu offers has to go somewhere.
+
+    The menu is a text file shown with `type`, not a run of `echo` lines: cmd
+    was cutting the Chinese ones in half (see the UTF-8 note below), so four
+    items — including 连接自检, the one people get sent to when nothing works —
+    simply never appeared on screen.
+    """
+    menu = (LAUNCHER.parent / "messages" / "menu.txt").read_text(encoding="utf-8")
+    offered = set(re.findall(r"^\s*(\d+)\s+\S", menu, re.MULTILINE))
 
     dispatched = set(re.findall(r'if\s+"%CHOICE%"=="(\d+)"', "\r\n".join(lines)))
 
     assert offered, "no menu items parsed — did the menu format change?"
     assert offered <= dispatched, f"menu items with no handler: {sorted(offered - dispatched)}"
+
+
+def test_every_dispatched_digit_is_on_the_menu(lines: list[str]):
+    """The other direction: a handler nobody is told about is dead code."""
+    menu = (LAUNCHER.parent / "messages" / "menu.txt").read_text(encoding="utf-8")
+    offered = set(re.findall(r"^\s*(\d+)\s+\S", menu, re.MULTILINE))
+    dispatched = set(re.findall(r'if\s+"%CHOICE%"=="(\d+)"', "\r\n".join(lines)))
+    assert dispatched <= offered, f"unreachable handlers: {sorted(dispatched - offered)}"
+
+
+def test_the_working_directory_is_checked_before_it_is_used(raw: str):
+    """A failed `pushd` leaves cmd in the code folder, not the data folder.
+
+    Observed: `mkdir` of the workspace was denied, `pushd` then failed, and the
+    launcher carried on — printing a header that named the workspace while
+    every command actually wrote beside the code. The two errors cmd printed
+    scrolled past above the menu.
+    """
+    body = raw[raw.index('pushd "%WORK%"') :]
+    head = body[: body.index("\r\n:work_ok\r\n")]  # the label, not the goto
+    assert "errorlevel" in head, "pushd failure is not checked"
+    assert "no_workspace.txt" in head, "nothing explains the failure"
 
 
 def test_no_multiline_parenthesised_blocks(lines: list[str]):
