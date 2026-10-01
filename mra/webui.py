@@ -153,6 +153,15 @@ COMMANDS: dict[str, Spec] = {
             "output": _OUTPUT,
         },
     ),
+    "rebuttal": Spec(
+        positional="reviews",
+        options={
+            "manuscript": Option("--manuscript"),
+            "data": Option("--data"),
+            "journal": _JOURNAL,
+            "output": _OUTPUT,
+        },
+    ),
     "finalize": Spec(positional="file", options={"journal": _JOURNAL}),
     "refs": Spec(positional="file", options={"list": Option("--list", "bool")}),
     "lint": Spec(positional="file"),
@@ -175,6 +184,7 @@ COMMANDS: dict[str, Spec] = {
 COSTLY = {
     "digest", "chat", "assess", "figures", "review", "draft", "proposal",
     "finalize", "hypothesis", "journal_add", "fingerprint", "search", "import",
+    "rebuttal",
 }
 
 

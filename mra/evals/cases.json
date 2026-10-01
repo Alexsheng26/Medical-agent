@@ -328,6 +328,80 @@
           "/5"
         ]
       }
+    },
+    {
+      "id": "rebuttal-mixed-reviews",
+      "command": "rebuttal",
+      "needs_model": true,
+      "why": "回复审稿人这件事上，模型的默认失败不是幻觉，是全盘认错——每条都认、每条都承诺补实验。这封信里四条意见里有三条不该认：一条审稿人把 n 读错了，一条稿子里本来就有，一条要求在人身上做五年的清除实验。全认下来的回复，要么赔掉数据本来撑得住的结论，要么承诺作者根本做不到的工作。",
+      "file": "reviews_mixed.txt",
+      "args": [
+        "--manuscript",
+        "manuscript_under_review.md"
+      ],
+      "sanity": {
+        "what": "逐条出了回复草稿",
+        "any": [
+          "回复草稿",
+          "审稿意见逐条处理"
+        ]
+      },
+      "expect": [
+        {
+          "id": "concedes-the-real-one",
+          "what": "认下真正要命的那条：横断面设计撑不起标题里的 drive",
+          "any": [
+            "横断面",
+            "动摇主结论",
+            "fatal"
+          ]
+        },
+        {
+          "id": "rejects-the-misread-n",
+          "what": "顶回 only 12 patients —— 稿子里写的是 48 例",
+          "any": [
+            "n = 48",
+            "n=48",
+            "48 例",
+            "48 biopsies",
+            "48 consecutive",
+            "forty-eight"
+          ]
+        },
+        {
+          "id": "spots-already-addressed",
+          "what": "指出性别那条稿子里本来就有（Table 1、已作协变量）",
+          "any": [
+            "文中已有",
+            "already-addressed",
+            "table 1",
+            "covariate",
+            "协变量"
+          ]
+        },
+        {
+          "id": "refuses-the-impossible-ask",
+          "what": "不承诺在人身上做五年清除实验",
+          "any": [
+            "超出本文范围",
+            "out-of-scope",
+            "不可行",
+            "infeasible",
+            "not feasible",
+            "做不到",
+            "cannot be performed"
+          ]
+        },
+        {
+          "id": "names-what-it-committed-to",
+          "what": "真正该补的那条（校正年龄和 BMI）落到了明确的待办上，而不是写一句空话",
+          "any": [
+            "承诺了这些事",
+            "校正年龄",
+            "校正后"
+          ]
+        }
+      ]
     }
   ]
 }

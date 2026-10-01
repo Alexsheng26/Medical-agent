@@ -19,6 +19,7 @@ from . import citations, deai, dialogue, journal as journal_mod, memory as memor
 from . import brief as brief_mod
 from . import figures as figures_mod
 from . import ingest, library as library_mod, pipeline, projects as projects_mod
+from . import rebuttal as rebuttal_mod
 from . import review as review_mod, writing
 from .config import Config
 from .llm import LLM, RefusalError
@@ -40,6 +41,7 @@ GUIDE = """
   第四步 对标评估      mra assess data.csv --journal Hepatology  # 对着该刊门槛再评一次
   第五步 写作          mra draft results --journal Hepatology --data data.csv -o results.md
                        mra finalize results.md --journal Hepatology
+  第六步 回复审稿      mra rebuttal reviews.txt --manuscript ms.md --data data.csv -o reply.md
   长期沉淀            mra fingerprint ./my_papers      # 学习你自己的文风
                        mra memory --refresh            # 课题方向图谱
 
@@ -808,6 +810,40 @@ def cmd_figures(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_rebuttal(args, cfg: Config) -> int:
+    """Respond to peer review — see mra/rebuttal.py for what it refuses to do."""
+    with _store(cfg) as store:
+        llm = _llm(cfg)
+        reviews = read_text(Path(args.reviews))
+        manuscript = read_text(Path(args.manuscript))
+        paths = [Path(p) for p in (args.data or [])]
+
+        draft = rebuttal_mod.respond(
+            cfg, store, llm, reviews, manuscript,
+            data_paths=paths, journal=args.journal or "",
+        )
+        print(rebuttal_mod.format_rebuttal(draft))
+
+        # Two things the model cannot be taken at its word on, both cheap to
+        # check and both embarrassing in front of an editor.
+        if invented := rebuttal_mod.unquoted_points(draft, reviews):
+            print(f"\n{NOTICE}下面这几条在审稿意见原文里找不到——"
+                  "可能是改写了措辞，也可能是凭空多出来的，发信前逐条核对：")
+            for item in invented:
+                print(f"    {item}")
+
+        if fake := rebuttal_mod.fabricated_citations(draft, store):
+            print(f"\n{NOTICE}回复里引用了文献库里没有的文献，不要直接发出去：")
+            print(f"    {', '.join(fake)}")
+
+        if args.output:
+            path = _write_out(rebuttal_mod.letter(draft), args.output, cfg, "")
+            print(f"\n{NOTICE}回复信草稿已写入 {path}")
+            print(f"{NOTICE}里面只有审稿意见和回复——严重程度、风险、待定事项都留在屏幕上，"
+                  "不会跟着信发给编辑。")
+    return 0
+
+
 def cmd_journal_add(args, cfg: Config) -> int:
     with _store(cfg) as store:
         llm = _llm(cfg)
@@ -1255,6 +1291,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data", nargs="+", required=True)
     p.add_argument("--notes", default="")
     p.add_argument("-o", "--output")
+
+    p = add("rebuttal", cmd_rebuttal, "Draft the point-by-point response to peer review")
+    p.add_argument("reviews", help="The reviewers' comments (txt/md)")
+    p.add_argument("--manuscript", required=True, help="The submitted manuscript")
+    p.add_argument("--data", nargs="+", help="Data files, so it knows what can be reanalysed")
+    p.add_argument("--journal", help="The journal's stored profile, for register")
+    p.add_argument("-o", "--output", help="Also write the response letter itself")
 
     p = add("nativize", cmd_nativize, "Rewrite text as a native-speaking scientist")
     p.add_argument("file")

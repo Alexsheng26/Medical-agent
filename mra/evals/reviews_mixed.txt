@@ -1,0 +1,19 @@
+Reviewer 1
+
+1. The central claim is that TREM2+ macrophages drive fibrosis progression.
+   The study is cross-sectional, so the direction of this relationship cannot
+   be established from these data.
+
+2. The study is underpowered. With only 12 patients the authors cannot support
+   stage-wise comparisons across five fibrosis stages.
+
+3. Sex was not considered as a biological variable, contrary to current NIH
+   guidance.
+
+Reviewer 2
+
+1. The authors should establish causality by depleting TREM2+ macrophages in a
+   human cohort and following fibrosis progression for five years.
+
+2. Please report whether the stage-wise association survives adjustment for age
+   and BMI, both of which track with fibrosis stage in this cohort.

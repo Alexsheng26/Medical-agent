@@ -137,9 +137,10 @@ def _seed(home: Path, workspace: Path) -> None:
         with resources.as_file(source) as path:
             shutil.copyfile(path, home / name)
 
-    source = resources.files("mra") / "evals" / "cross_sectional.txt"
-    with resources.as_file(source) as path:
-        shutil.copyfile(path, home / "cross_sectional.txt")
+    for name in ("cross_sectional.txt", "reviews_mixed.txt", "manuscript_under_review.md"):
+        source = resources.files("mra") / "evals" / name
+        with resources.as_file(source) as path:
+            shutil.copyfile(path, home / name)
 
     (home / "forged.md").write_text(
         "TREM2+ macrophages accumulate in fibrous septa [PMID:34556677].\n"

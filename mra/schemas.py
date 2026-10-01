@@ -364,3 +364,91 @@ class BriefImpact(BaseModel):
         description="What the researcher should do about it, or empty when nothing is "
         "needed. Be concrete: which experiment, which claim to soften, which paper to read."
     )
+
+
+# Stances a response can take. The classification is the point of the whole
+# command: a model asked to "respond to reviewers" agrees with everything, and
+# a letter that concedes every point either promises work nobody will do or
+# gives away a claim the data actually supports.
+STANCES = (
+    "concede-and-do",
+    "concede-and-limit",
+    "already-addressed",
+    "disagree",
+    "out-of-scope",
+)
+
+SEVERITIES = ("fatal", "major", "minor")
+
+
+class ReviewerPoint(BaseModel):
+    """One reviewer comment and the response to it."""
+
+    reviewer: str = Field(description="Which reviewer, e.g. 'Reviewer 2'")
+    number: str = Field(
+        description="The comment's number as the reviewer wrote it, e.g. '3' or '2.1'. "
+        "When the letter is unnumbered prose, number them in order of appearance."
+    )
+    quote: str = Field(
+        description="The comment copied from the letter, word for word. Long comments "
+        "may be truncated, but every word kept must appear in the letter unchanged — "
+        "this is checked mechanically against the source."
+    )
+    asks_for: str = Field(
+        description="What the reviewer actually wants, in one sentence. Often not what "
+        "they literally asked: 'the statistics are inappropriate' usually means they do "
+        "not believe the effect survives the right test."
+    )
+    stance: str = Field(
+        description="One of: concede-and-do (they are right and it needs new work), "
+        "concede-and-limit (right, but the answer is a stated limitation rather than "
+        "more experiments), already-addressed (the paper answers this and they missed "
+        "it — which is a writing failure, not their failure), disagree (they are "
+        "mistaken or the objection does not hold), out-of-scope (fair question, "
+        "different paper)."
+    )
+    severity: str = Field(
+        description="fatal if conceding it costs the main claim, major if it costs a "
+        "figure or a conclusion, minor otherwise"
+    )
+    response: str = Field(
+        description="The reply to this reviewer, in English, in the register of a "
+        "response letter. Address the objection, do not restate it. No thanking, no "
+        "flattery beyond a plain opening clause."
+    )
+    manuscript_change: str = Field(
+        description="What changes in the manuscript, naming the section and what the "
+        "new sentence says. 'none' when the response needs no edit."
+    )
+    new_work: str = Field(
+        description="The experiment, analysis or reanalysis this commits the authors "
+        "to, stated concretely enough to cost out. Empty when the response commits to "
+        "nothing new. Never promise work here that the response does not require."
+    )
+    evidence: list[str] = Field(
+        description="[PMID:x] or [local:x] markers for published work the response "
+        "leans on. Only identifiers present in the supplied literature."
+    )
+    risk: str = Field(
+        description="How this reviewer is likely to push back on this exact response, "
+        "or empty when the response closes the point."
+    )
+
+
+class Rebuttal(BaseModel):
+    """A point-by-point response to a set of reviews."""
+
+    points: list[ReviewerPoint]
+    overall: str = Field(
+        description="The letter's opening paragraph: what changed in the revision, in "
+        "three or four sentences. No gratitude inflation."
+    )
+    decisions: list[str] = Field(
+        description="Choices only the authors can make — which experiments to run, "
+        "which claim to drop, whether to appeal. One line each, phrased as the "
+        "question they have to answer."
+    )
+    threats: list[str] = Field(
+        description="Comments that genuinely endanger the main conclusion, however the "
+        "response is worded. Empty if none do. Do not soften this to be encouraging."
+    )

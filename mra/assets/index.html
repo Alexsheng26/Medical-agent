@@ -249,6 +249,15 @@ const TASKS = [
         { key: "file", type: "file", label: "文稿", required: true },
         { key: "journal", type: "text", label: "目标期刊", required: true },
       ] },
+    { id: "rebuttal", name: "回复审稿人",
+      lede: "逐条分类再回复：哪条认、哪条顶回去、哪条是你没写显眼。会把「这封信一旦发出你就承诺了什么」单独列出来。",
+      cmd: "rebuttal", fields: [
+        { key: "reviews", type: "file", label: "审稿意见（把编辑的信存成 txt 或 md）", required: true },
+        { key: "manuscript", type: "file", label: "投出去的那版稿子", required: true },
+        { key: "data", type: "file", label: "原始数据（可选，让它知道哪些能重算）" },
+        { key: "journal", type: "text", label: "期刊（可选，用于语气）" },
+        { key: "output", type: "text", label: "回复信写到（可选）", placeholder: "rebuttal.md" },
+      ] },
   ]},
   { group: "工具", items: [
     { id: "demo", name: "试用示例", lede: "把自带的示例语料和数据复制到数据目录，然后导入。不花钱。", demo: true },
