@@ -1063,9 +1063,7 @@ def cmd_eval(args, cfg: Config) -> int:
     """Run the cases whose defects are known, and report what was missed."""
     from . import evaluation
 
-    baseline = None
-    if args.baseline:
-        baseline = json.loads(read_text(Path(args.baseline)))
+    baseline = evaluation.load_baseline(args.baseline or "") or None
 
     # The estimate has to describe what will actually run, or it is a wrong
     # number printed with the authority of a right one.
@@ -1331,7 +1329,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--free-only", action="store_true",
                    help="Only the cases that need no model call")
     p.add_argument("--only", help="Run one case by id")
-    p.add_argument("--baseline", help="A previous --output file, to compare against")
+    p.add_argument(
+        "--baseline",
+        help="Compare against a previous run: a path to an --output file, or the "
+        "name of a baseline that ships with the tool (claude-opus-5). The name "
+        "works from any directory; a relative path does not.",
+    )
     p.add_argument("--show", action="store_true",
                    help="Print the full output of any case that missed something")
     p.add_argument("-o", "--output", help="Write the result as JSON")

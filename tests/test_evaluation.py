@@ -270,3 +270,69 @@ class TestPartialComparison:
         text = evaluation.format_report(self._report([("z", False)]), baseline=full)
         assert "没抓到的" in text
         assert "判断质量" in text
+
+
+class TestBaselineResolution:
+    """A baseline has to be nameable, not just path-able.
+
+    The launcher runs every command from the workspace, so the path anyone
+    would type — `mra/evals/baseline-claude-opus-5.json`, which is what the
+    repository looks like — resolves to nothing there. The browser is worse
+    still: it has no working directory to be relative to.
+    """
+
+    def test_the_shipped_baseline_is_listed(self):
+        assert "claude-opus-5" in evaluation.shipped_baselines()
+
+    def test_a_shipped_baseline_loads_by_name(self):
+        assert evaluation.load_baseline("claude-opus-5")["results"]
+
+    def test_a_path_still_works(self, tmp_path):
+        target = tmp_path / "mine.json"
+        target.write_text(json.dumps({"results": [{"id": "x"}]}), encoding="utf-8")
+        assert evaluation.load_baseline(str(target))["results"][0]["id"] == "x"
+
+    def test_nothing_requested_is_not_an_error(self):
+        assert evaluation.load_baseline("") == {}
+
+    def test_an_unknown_name_says_what_is_available(self):
+        with pytest.raises(ValueError, match="claude-opus-5"):
+            evaluation.load_baseline("gpt-9")
+
+    def test_a_name_resolves_the_same_from_any_directory(self, tmp_path, monkeypatch):
+        """The failure this exists to prevent."""
+        monkeypatch.chdir(tmp_path)
+        assert evaluation.load_baseline("claude-opus-5")["results"]
+
+
+class TestWebPanel:
+    """What one click actually does."""
+
+    def test_the_default_run_measures_the_model(self):
+        """`free_only` checked by default meant the obvious click ran the two
+        offline cases and reported 5/5 — a green number that says nothing at
+        all about the model being evaluated."""
+        from mra import webui
+
+        page = webui.read_index().decode("utf-8")
+        panel = page[page.index('id: "eval"'):]
+        panel = panel[:panel.index("] }")]
+        assert '"free_only", type: "check", checked: false' in panel
+
+    def test_the_panel_offers_the_baseline_by_name(self):
+        from mra import webui
+
+        page = webui.read_index().decode("utf-8")
+        panel = page[page.index('id: "eval"'):]
+        assert 'value: "claude-opus-5"' in panel[:panel.index("] }")]
+
+    def test_eval_is_marked_as_costing_money(self):
+        from mra import webui
+
+        assert "eval" in webui.COSTLY
+
+    def test_the_web_passes_the_baseline_through(self):
+        from mra import webui
+
+        argv = webui.build_argv("eval", {"baseline": "claude-opus-5", "yes": True})
+        assert "--baseline=claude-opus-5" in argv

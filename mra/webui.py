@@ -185,6 +185,9 @@ COSTLY = {
     "digest", "chat", "assess", "figures", "review", "draft", "proposal",
     "finalize", "hypothesis", "journal_add", "fingerprint", "search", "import",
     "rebuttal",
+    # eval runs the paid cases unless told otherwise — that is the whole point
+    # of running it, so it carries the marker.
+    "eval",
 }
 
 

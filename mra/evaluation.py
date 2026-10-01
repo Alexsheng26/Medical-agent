@@ -94,6 +94,47 @@ def load_cases() -> list[dict[str, Any]]:
     return json.loads(raw)["cases"]
 
 
+#: Baselines shipped inside the package are named `baseline-<name>.json`.
+BASELINE_PREFIX = "baseline-"
+
+
+def shipped_baselines() -> list[str]:
+    """The names of the baselines that ship with the tool."""
+    folder = resources.files("mra") / "evals"
+    return sorted(
+        entry.name[len(BASELINE_PREFIX):-len(".json")]
+        for entry in folder.iterdir()
+        if entry.name.startswith(BASELINE_PREFIX) and entry.name.endswith(".json")
+    )
+
+
+def load_baseline(reference: str) -> dict[str, Any]:
+    """Read a baseline from a path, or by the name of one that ships with the tool.
+
+    A relative path is only correct from the directory it was written against,
+    and the launcher runs every command from the workspace — so
+    `mra/evals/baseline-claude-opus-5.json`, which is what the repository looks
+    like and therefore what anyone would type, resolves to nothing there. A
+    name resolves the same wherever it is run from, which is what the browser
+    needs: it has no notion of a working directory at all.
+    """
+    if not reference:
+        return {}
+
+    path = Path(reference)
+    if path.is_file():
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    source = resources.files("mra") / "evals" / f"{BASELINE_PREFIX}{reference}.json"
+    if source.is_file():
+        return json.loads(source.read_text(encoding="utf-8"))
+
+    available = "、".join(shipped_baselines()) or "(没有内置基线)"
+    raise ValueError(
+        f"找不到基线 {reference!r}。给一个文件路径，或者内置基线的名字：{available}"
+    )
+
+
 def run(
     cfg: Config,
     *,
