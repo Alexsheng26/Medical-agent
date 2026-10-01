@@ -504,3 +504,11 @@ class TestUnwritableWorkspace:
         """`--workspace .mra` has a parent of "." — not something to cd into."""
         message = cli._cannot_make_workspace(Path(".mra"), PermissionError(13, "denied"))
         assert "进这个文件夹：.mra" in message
+
+    def test_the_message_names_the_admin_only_folder_case(self):
+        """The one that actually happened: Explorer could create a folder
+        there (it elevates and asks), cmd and Python could not. A reader who
+        only tried Explorer concluded the folder was fine."""
+        message = cli._cannot_make_workspace(Path("D:/mra/.mra"), PermissionError(13, "denied"))
+        assert "管理员" in message
+        assert "USERPROFILE" in message, "no escape hatch that needs no permission surgery"
