@@ -402,6 +402,63 @@
           ]
         }
       ]
+    },
+    {
+      "id": "compare-planted-contradiction",
+      "command": "compare",
+      "needs_model": true,
+      "why": "示例语料里埋了一对看起来互相矛盾的文章：一篇说巨噬细胞来源的 TGF-β1 驱动纤维化，另一篇说清掉 Kupffer 细胞星状细胞照样活化。并排摆两段摘要谁都会；这条测的是它能不能看出两篇其实不矛盾——一篇是饮食诱导的 NASH、一篇是 CCl4 毒性损伤，一篇敲掉的是全部髓系细胞、一篇只清掉常驻的 Kupffer 细胞，单核来源的那群还在。",
+      "args": [
+        "31234567",
+        "28001122"
+      ],
+      "sanity": {
+        "what": "出了逐项对比",
+        "any": [
+          "逐项对比"
+        ]
+      },
+      "expect": [
+        {
+          "id": "registers-the-conflict",
+          "what": "认出这两篇看起来互相矛盾",
+          "any": [
+            "看起来互相矛盾"
+          ]
+        },
+        {
+          "id": "reconciles-by-injury-model",
+          "what": "指出损伤模型不同：饮食诱导的 NASH vs CCl4 毒性损伤",
+          "any": [
+            "造模",
+            "损伤模型",
+            "饮食诱导",
+            "毒性损伤",
+            "diet-induced",
+            "injury model"
+          ]
+        },
+        {
+          "id": "reconciles-by-cell-population",
+          "what": "指出被干预的细胞群不同：清掉常驻 Kupffer 细胞，单核来源的募集巨噬细胞还在",
+          "any": [
+            "单核来源",
+            "monocyte-derived",
+            "募集",
+            "recruited",
+            "infiltrating"
+          ]
+        },
+        {
+          "id": "weighs-the-human-data-as-correlation",
+          "what": "指出 A 的人群部分只是相关，因果结论靠的是小鼠",
+          "any": [
+            "因果",
+            "causal",
+            "correlational"
+          ]
+        }
+      ]
     }
   ]
 }

@@ -452,3 +452,61 @@ class Rebuttal(BaseModel):
         description="Comments that genuinely endanger the main conclusion, however the "
         "response is worded. Empty if none do. Do not soften this to be encouraging."
     )
+
+
+class MindNode(BaseModel):
+    """One node of a mind map. Flat with parent links: structured outputs do
+    not support recursive schemas, so the tree is rebuilt in code."""
+
+    id: str = Field(description="Unique within the map, e.g. '1', '1.2', '1.2.1'")
+    parent: str = Field(description="The id of the parent node; empty for the single root")
+    text: str = Field(
+        description="A short phrase, not a sentence. Keep numbers, gene names and "
+        "effect sizes exact; drop articles, connectives and hedging."
+    )
+    source: str = Field(
+        description="The letter of the paper this node comes from (A, B, ...), or "
+        "empty for the root and for nodes that synthesise across papers"
+    )
+
+
+class MindMap(BaseModel):
+    nodes: list[MindNode]
+
+
+class CompareCell(BaseModel):
+    paper: str = Field(description="The paper's letter: A, B, C ...")
+    text: str = Field(description="What this paper says or did on this dimension. "
+                      "Concrete: the model, the n, the effect size, the direction.")
+
+
+class CompareRow(BaseModel):
+    dimension: str = Field(description="What is being compared, in the researcher's language")
+    cells: list[CompareCell] = Field(description="One cell per paper, every paper")
+    alike: bool = Field(description="True if the papers are essentially the same on "
+                        "this dimension, false if they differ in a way that matters")
+    meaning: str = Field(description="Why the difference matters for reading the "
+                         "results together, or empty when they are alike")
+
+
+class Conflict(BaseModel):
+    point: str = Field(description="The question on which the papers appear to disagree")
+    positions: list[CompareCell] = Field(description="What each side found, with its evidence")
+    reconciliation: str = Field(
+        description="The most likely reason both results can be true at once — a "
+        "different model, population, cell type, dose or time point — or an explicit "
+        "statement that they genuinely cannot both hold"
+    )
+    decider: str = Field(description="The experiment or data that would settle it")
+
+
+class Comparison(BaseModel):
+    shared: list[str] = Field(description="What the papers agree on or have in common. "
+                              "Each item names the letters it applies to, e.g. '(A, B) ...'")
+    rows: list[CompareRow]
+    conflicts: list[Conflict] = Field(description="Apparent contradictions. Empty if none.")
+    synthesis: str = Field(description="How the papers fit together as one picture, "
+                           "including which one carries more weight and why")
+    for_you: str = Field(description="What this comparison means for the researcher's "
+                         "own question or hypothesis, if one was supplied; otherwise "
+                         "what it means for someone designing the next study")

@@ -285,3 +285,107 @@ class TestInBrowser:
         assert page.inner_text("#picker-where")
         page.locator("#picker-close").click()
         assert page.failures == []
+
+
+# ------------------------------------------------- choosing papers in the page
+
+CORPUS = __import__("pathlib").Path(__file__).resolve().parent.parent / "mra" / "examples" / "demo_corpus.xml"
+
+
+def _seed(workspace):
+    from mra.pubmed import parse_efetch_xml
+    from mra.store import Store
+
+    with Store(workspace / "knowledge.db") as store:
+        store.add_articles(parse_efetch_xml(CORPUS.read_text(encoding="utf-8")))
+
+
+def _workspace_of(server):
+    from pathlib import Path
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    state = json.loads(opener.open(f"{server}/api/state?t=test-token", timeout=10).read())
+    return Path(state["workspace"])
+
+
+def _get_json(url):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    return json.loads(opener.open(url, timeout=10).read())
+
+
+class TestArticlesEndpoint:
+    def test_an_empty_project_lists_nothing_and_creates_no_database(self, tmp_path):
+        """Opening the picker on a new project must not leave an empty library behind."""
+        from http.server import ThreadingHTTPServer
+
+        workspace = tmp_path / ".mra"
+        workspace.mkdir()
+
+        class Bound(webui.Handler):
+            pass
+
+        Bound.token, Bound.jobs, Bound.cfg = "t", webui.Jobs(), Config(workspace=workspace)
+        httpd = ThreadingHTTPServer((webui.HOST, 0), Bound)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            port = httpd.server_address[1]
+            assert _get_json(f"http://{webui.HOST}:{port}/api/articles?t=t") == {"articles": []}
+            assert not (workspace / "knowledge.db").exists()
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+    def test_lists_the_library_with_whether_each_was_read(self, server):
+        workspace = _workspace_of(server)
+        _seed(workspace)
+        from mra.store import Store
+
+        with Store(workspace / "knowledge.db") as store:
+            store.save_card("31234567", {"scientific_question": "q", "evidence_strength": 3})
+
+        rows = _get_json(f"{server}/api/articles?t=test-token")["articles"]
+        assert len(rows) == 8
+        read = {row["id"]: row["read"] for row in rows}
+        assert read["31234567"] is True and read["28001122"] is False
+
+    def test_needs_the_token_like_everything_else(self, server):
+        with pytest.raises(urllib.error.HTTPError) as caught:
+            _get_json(f"{server}/api/articles")
+        assert caught.value.code == 403
+
+
+class TestPickingPapersInTheBrowser:
+    def test_the_picker_lists_the_library(self, page, server):
+        _seed(_workspace_of(server))
+        page.get_by_role("button", name="异同比较").click()
+        page.wait_for_selector(".article", timeout=10_000)
+        assert page.locator(".article").count() == 8
+        assert page.failures == []
+
+    def test_comparing_one_paper_is_stopped_before_anything_runs(self, page, server):
+        _seed(_workspace_of(server))
+        page.get_by_role("button", name="异同比较").click()
+        page.wait_for_selector(".article", timeout=10_000)
+        page.locator(".article input").first.check()
+        assert page.inner_text(".picked") == "已选 1 篇"
+
+        messages = []
+        page.once("dialog", lambda dialog: (messages.append(dialog.message), dialog.dismiss()))
+        page.get_by_role("button", name="开始").click()
+        page.wait_for_timeout(300)
+        assert messages == ["至少要选 2 篇，现在是 1 篇。"]
+        assert page.inner_text(".status") == ""
+
+    def test_a_mindmap_payload_is_drawn_as_a_tree(self, page):
+        page.get_by_role("button", name="思维导图").click()
+        page.wait_for_timeout(250)
+        page.evaluate("""() => drawMindmap(document.querySelector('.mindmap'), {
+            root: "r", multi: false, chars: 9, limit: 300, legend: {},
+            nodes: [{id: "r", parent: "", text: "中心", source: ""},
+                    {id: "1", parent: "r", text: "方法", source: ""},
+                    {id: "1.1", parent: "1", text: "敲除小鼠", source: ""}]})""")
+        assert page.locator(".mindmap").is_visible()
+        assert page.locator(".mm .node").count() == 3
+        assert page.inner_text(".mm .d0") == "中心"
+        assert "共 9 字（上限 300）" in page.inner_text(".mindmap .meta")
+        assert page.failures == []

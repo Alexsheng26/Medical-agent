@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from . import brief as brief_mod
 from . import figures as figures_mod
 from . import ingest, library as library_mod, pipeline, projects as projects_mod
 from . import rebuttal as rebuttal_mod
+from . import compare as compare_mod, mindmap as mindmap_mod, selection
 from . import review as review_mod, writing
 from .config import Config
 from .llm import LLM, RefusalError
@@ -32,6 +34,8 @@ GUIDE = """
   第一步 建库          mra search "NASH 肝纤维化 巨噬细胞" --max 60
                        mra import result.xml           # 或：导入浏览器存下的 PubMed XML
                        mra digest                      # 结构化提炼每篇文献
+                       mra mindmap 31234567 --limit 300  # 一篇或几篇的思维导图，限字数
+                       mra compare 31234567 28001122   # 异同点，以及矛盾是不是真矛盾
   第二步 磨假说        mra chat                        # 多轮苏格拉底式对话
                        mra hypothesis --note "第一版"  # 冻结为可版本比较的假说
                        mra proposal -o proposal.md     # 生成 proposal 框架
@@ -591,6 +595,62 @@ def cmd_library(args, cfg: Config) -> int:
             print(library_mod.format_card(store, args.id))
         else:
             print(library_mod.format_library(store))
+    return 0
+
+
+def cmd_mindmap(args, cfg: Config) -> int:
+    """A mind map of the chosen papers, held to a word budget in code."""
+    if args.limit and args.limit < mindmap_mod.MINIMUM_LIMIT:
+        raise ValueError(
+            f"字数上限至少 {mindmap_mod.MINIMUM_LIMIT}（或者 0 表示不限）。"
+            "再小就只剩一个根节点了。"
+        )
+    with _store(cfg) as store:
+        llm = _llm(cfg)
+        papers = selection.resolve(cfg, store, args.items, llm=llm,
+                                   minimum=1, maximum=compare_mod.MAXIMUM)
+        drawn = mindmap_mod.draw(cfg, llm, papers, limit=args.limit, focus=args.focus)
+        print(mindmap_mod.format_map(drawn, papers))
+
+        # The browser draws the map from this line and hides it; a terminal
+        # never sees it, because only the web interface sets MRA_WEB.
+        if os.environ.get("MRA_WEB") == "1":
+            print(mindmap_mod.web_line(drawn, papers))
+
+        if args.output:
+            suffix = Path(args.output).suffix
+            path = _write_out(mindmap_mod.export(drawn, papers, suffix), args.output, cfg, "")
+            how = ("幕布、XMind 都能直接导入 OPML" if suffix.lower() == ".opml"
+                   else "XMind：文件 → 导入 → Markdown")
+            print(f"\n{NOTICE}已写入 {path}（{how}）")
+    return 0
+
+
+def cmd_compare(args, cfg: Config) -> int:
+    """Where the chosen papers agree, differ, and whether a conflict is real."""
+    with _store(cfg) as store:
+        llm = _llm(cfg)
+        papers = selection.resolve(cfg, store, args.items, llm=llm,
+                                   minimum=compare_mod.MINIMUM, maximum=compare_mod.MAXIMUM)
+        result = compare_mod.compare(cfg, store, llm, papers, focus=args.focus)
+        print(compare_mod.format_comparison(result, papers, args.focus))
+
+        if stray := compare_mod.stray_letters(result, papers):
+            print(f"\n{NOTICE}比较里出现了你没选的文献代号：{', '.join(stray)}。"
+                  "那几格说的不是你选的文章，别引用。")
+        if gaps := compare_mod.missing_cells(result, papers):
+            print(f"\n{NOTICE}这几项漏掉了某篇文章（表里标成了「漏了这篇」）：")
+            for gap in gaps:
+                print(f"    {gap}")
+        if foreign := compare_mod.foreign_citations(result, papers):
+            print(f"\n{NOTICE}比较里引用了不在这次选择里的文献：{', '.join(foreign)}。"
+                  "核对之前不要当依据。")
+
+        if args.output:
+            text = (compare_mod.to_json(result) if Path(args.output).suffix.lower() == ".json"
+                    else compare_mod.to_markdown(result, papers, args.focus))
+            path = _write_out(text, args.output, cfg, "")
+            print(f"\n{NOTICE}已写入 {path}")
     return 0
 
 
@@ -1216,6 +1276,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = add("library", cmd_library, "List stored documents, or show one card")
     p.add_argument("id", nargs="?", help="PMID or local:xxxxxxxx (omit to list all)")
+
+    p = add("mindmap", cmd_mindmap, "Mind map of one or more papers, under a word budget")
+    p.add_argument("items", nargs="+",
+                   help="Identifiers from `mra library`, or files (imported first)")
+    p.add_argument("--limit", type=int, default=mindmap_mod.DEFAULT_LIMIT,
+                   help="字数上限：中文每字算一，英文每词算一 (default 300; 0 = no limit)")
+    p.add_argument("--focus", default="", help="What you want from it — 侧重什么、给谁看")
+    p.add_argument("-o", "--output", help="Also write it: .md for XMind, .opml for 幕布")
+
+    p = add("compare", cmd_compare, "Where papers agree, differ, and whether they really conflict")
+    p.add_argument("items", nargs="+",
+                   help="Two or more identifiers from `mra library`, or files")
+    p.add_argument("--focus", default="", help="What to concentrate on — 侧重什么、给谁看")
+    p.add_argument("-o", "--output", help="Also write it: .md (with a table) or .json")
 
     p = add("digest", cmd_digest, "Extract structured cards for stored articles")
     p.add_argument("--limit", type=int, help="Only process this many")

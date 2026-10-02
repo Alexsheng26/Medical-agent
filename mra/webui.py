@@ -41,6 +41,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import projects
 from .config import Config
+from .store import Store
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -153,6 +154,20 @@ COMMANDS: dict[str, Spec] = {
             "output": _OUTPUT,
         },
     ),
+    "mindmap": Spec(
+        positional="items",
+        repeated=True,
+        options={
+            "limit": Option("--limit", "int"),
+            "focus": Option("--focus"),
+            "output": _OUTPUT,
+        },
+    ),
+    "compare": Spec(
+        positional="items",
+        repeated=True,
+        options={"focus": Option("--focus"), "output": _OUTPUT},
+    ),
     "rebuttal": Spec(
         positional="reviews",
         options={
@@ -184,7 +199,7 @@ COMMANDS: dict[str, Spec] = {
 COSTLY = {
     "digest", "chat", "assess", "figures", "review", "draft", "proposal",
     "finalize", "hypothesis", "journal_add", "fingerprint", "search", "import",
-    "rebuttal",
+    "rebuttal", "mindmap", "compare",
     # eval runs the paid cases unless told otherwise — that is the whole point
     # of running it, so it carries the marker.
     "eval",
@@ -214,7 +229,9 @@ def build_argv(command: str, payload: dict[str, Any]) -> list[str]:
             argv.append(_positional(value))
 
     for key, value in payload.items():
-        if key == spec.positional or value in (None, "", False):
+        # Identity, not `in (None, "", False)`: 0 == False in Python, so that
+        # test silently dropped a typed 0 — "no word limit" became the default.
+        if key == spec.positional or value is None or value is False or value == "":
             continue
         option = spec.options.get(key)
         if option is None:
@@ -277,7 +294,11 @@ class Job:
             sys.executable, "-m", "mra",
             f"--workspace={self._workspace}", *self.argv,
         ]
-        environment = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+        # MRA_WEB tells a command it may print the one-line payloads the page
+        # draws from (a mind map), which a terminal should never see.
+        environment = dict(
+            os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1", MRA_WEB="1"
+        )
         try:
             self._process = subprocess.Popen(
                 command,
@@ -468,6 +489,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if url.path == "/api/state":
             self._json(self._state((query.get("p") or [""])[0]))
+        elif url.path == "/api/articles":
+            self._json(self._articles((query.get("p") or [""])[0]))
         elif url.path == "/api/browse":
             start = (query.get("path") or [str(Path.home())])[0]
             self._json(listing(Path(start)))
@@ -547,6 +570,36 @@ class Handler(BaseHTTPRequestHandler):
             "home": str(Path.home()),
             "costly": sorted(COSTLY),
         }
+
+    def _articles(self, wanted: str = "") -> dict[str, Any]:
+        """The library of the project the page is showing, for ticking papers.
+
+        Typing identifiers copied from another screen is a step a browser
+        exists to remove. Read-only, and never creates a database: opening a
+        project with no library yet must not leave an empty one behind.
+        """
+        try:
+            workspace = self._workspace_for(wanted)
+        except ValueError:
+            return {"articles": []}
+        database = workspace / "knowledge.db"
+        if not database.is_file():
+            return {"articles": []}
+
+        rows = []
+        with Store(database) as store:
+            unread = set(store.pmids_without_cards())
+            for identifier in store.all_pmids():
+                article = store.get_article(identifier)
+                if article is None:
+                    continue
+                rows.append({
+                    "id": identifier,
+                    "title": article.title or "(无标题)",
+                    "year": article.year or "",
+                    "read": identifier not in unread,
+                })
+        return {"articles": rows}
 
     def _start(self, payload: dict[str, Any]) -> None:
         command = str(payload.get("command", ""))

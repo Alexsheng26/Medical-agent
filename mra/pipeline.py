@@ -56,6 +56,10 @@ class SearchResult:
     added: int
     skipped_no_abstract: int
     warnings: list[str] = field(default_factory=list)
+    # For imports: which stored records each file ended up as, whether it was
+    # new or already there. A caller that was handed a PDF and wants to work on
+    # it needs this; "already in the knowledge base" is not an identifier.
+    identifiers: dict[str, list[str]] = field(default_factory=dict)
 
 
 def plan_query(llm: LLM, topic: str, language: str = "zh") -> QueryPlan:
@@ -130,6 +134,7 @@ def import_files(
     """
     found = added = skipped = 0
     warnings: list[str] = []
+    identifiers: dict[str, list[str]] = {}
 
     for path in paths:
         if not path.exists():
@@ -142,6 +147,7 @@ def import_files(
             found += len(articles)
             skipped += len(articles) - len(usable)
             added += store.add_articles(usable, topic=topic)
+            identifiers[str(path)] = [a.pmid for a in usable]
             if on_file:
                 on_file(path, len(usable), [])
             continue
@@ -155,6 +161,7 @@ def import_files(
 
         if not doc.usable:
             skipped += 1
+            identifiers[str(path)] = []
             for warning in doc.warnings:
                 warnings.append(f"{path.name}: {warning}")
             if on_file:
@@ -162,6 +169,7 @@ def import_files(
             continue
 
         article = _local_article(cfg, doc, llm)
+        identifiers[str(path)] = [article.pmid]
         if store.has_article(article.pmid):
             skipped += 1
             warnings.append(f"{path.name}: already in the knowledge base as {article.pmid}")
@@ -180,6 +188,7 @@ def import_files(
         added=added,
         skipped_no_abstract=skipped,
         warnings=warnings,
+        identifiers=identifiers,
     )
 
 

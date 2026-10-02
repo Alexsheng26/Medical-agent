@@ -124,6 +124,50 @@
   }
   .picker-list button:hover { background: var(--accent-soft); }
   .picker-foot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; }
+  /* 选文献：库里打勾，或者直接选文件 */
+  .articles { border: 1px solid var(--line); border-radius: 7px; background: var(--bg);
+              max-height: 260px; overflow-y: auto; margin-bottom: 8px; font-size: 13px; }
+  .articles .empty { color: var(--muted); padding: 10px 12px; }
+  /* Two classes deep on purpose: each row is a <label>, and `.field label`
+     (bold, block) would otherwise win and flatten the grid. */
+  .articles .article { display: grid; grid-template-columns: auto 9.5em 1fr auto; gap: 10px;
+             align-items: baseline; padding: 6px 12px; border-bottom: 1px solid var(--line);
+             cursor: pointer; font-weight: 400; margin: 0; font-size: 13px; }
+  .articles .article:last-child { border-bottom: 0; }
+  .articles .article:hover { background: var(--accent-soft); }
+  .articles .article input { width: auto; margin: 0; align-self: center; }
+  .articles .article code { font: 11.5px ui-monospace, Menlo, Consolas, monospace; color: var(--muted);
+                            overflow: hidden; text-overflow: ellipsis; }
+  .articles .article .read { font-size: 11.5px; color: var(--ok); white-space: nowrap; }
+  .picked { font-size: 12.5px; color: var(--muted); margin: 2px 0 6px; }
+
+  /* 思维导图：横向树，连线全用边框画，不依赖任何外部库 */
+  .mindmap { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+             padding: 14px 16px; margin-top: 16px; overflow-x: auto; }
+  .mindmap .meta { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+  .mindmap .meta div { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .mm, .mm ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .mm li { display: flex; align-items: center; position: relative; padding: 3px 0 3px 18px; }
+  .mm > li { padding-left: 0; }
+  .mm li::before { content: ""; position: absolute; left: 0; top: 50%; width: 18px;
+                   border-top: 1.5px solid var(--line); }
+  .mm li::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+                  border-left: 1.5px solid var(--line); }
+  .mm li:first-child::after { top: 50%; }
+  .mm li:last-child::after { bottom: 50%; }
+  .mm li:only-child::after { display: none; }
+  .mm > li::before, .mm > li::after { display: none; }
+  .mm ul { position: relative; margin-left: 18px; }
+  .mm ul::before { content: ""; position: absolute; left: -18px; top: 50%; width: 18px;
+                   border-top: 1.5px solid var(--line); }
+  .mm .node { white-space: nowrap; padding: 4px 9px; border-radius: 6px; font-size: 13px; line-height: 1.4; }
+  .mm .d0 { background: var(--accent); color: #fff; font-weight: 600; font-size: 14px; padding: 7px 12px; }
+  .mm .d1 { background: var(--accent-soft); font-weight: 600; }
+  .mm .d2 { border: 1px solid var(--line); background: var(--bg); }
+  .mm .d3, .mm .d4 { color: var(--ink); font-size: 12.5px; }
+  .mm .src { font: 10.5px ui-monospace, Menlo, Consolas, monospace; color: var(--muted);
+             margin-left: 6px; }
+
   .warn-note { background: var(--accent-soft); border-left: 3px solid var(--warn);
                padding: 9px 13px; border-radius: 5px; font-size: 13px; margin-bottom: 16px; }
 </style>
@@ -200,6 +244,26 @@ const TASKS = [
     { id: "library", name: "文献列表", lede: "库里有哪些文献，以及每一篇提炼出了什么。不花钱。",
       cmd: "library", linkify: true, fields: [
         { key: "id", type: "text", label: "文献编号", hint: "留空 = 列出全部。填一个编号 = 看那一篇的完整提炼结果（也可以直接点下面列表里的编号）。" },
+      ] },
+    { id: "mindmap", name: "思维导图",
+      lede: "一篇或几篇画成一张图。字数由程序数：超了先让它重画一次，还超就从最末端的小分支剪，剪掉了什么会列出来。",
+      cmd: "mindmap", fields: [
+        { key: "items", type: "articles", label: "选文献（库里的打勾，或直接选 PDF）", required: true, min: 1 },
+        { key: "limit", type: "number", label: "字数上限", value: "300",
+          hint: "中文每个字算一、英文每个词算一，标点不算。填 0 表示不限。" },
+        { key: "focus", type: "area", label: "你的要求（可选）",
+          placeholder: "比如：侧重方法学；给本科生讲；只保留和临床有关的" },
+        { key: "output", type: "text", label: "另存为（可选）", placeholder: "导图.md",
+          hint: ".md 可以导入 XMind（文件 → 导入 → Markdown）；.opml 可以导入幕布。" },
+      ] },
+    { id: "compare", name: "异同比较",
+      lede: "两篇以上放在一起：哪里一样、哪里不同、不同意味着什么。看起来矛盾的地方，会判断是不是真矛盾、用什么实验能分出对错。课题里有冻结的假说时，还会说对你的假说意味着什么。",
+      cmd: "compare", fields: [
+        { key: "items", type: "articles", label: "选至少两篇（库里的打勾，或直接选 PDF）", required: true, min: 2 },
+        { key: "focus", type: "area", label: "你的要求（可选）",
+          placeholder: "比如：侧重研究设计和证据等级；从临床转化的角度；只比较机制" },
+        { key: "output", type: "text", label: "另存为（可选）", placeholder: "比较.md",
+          hint: ".md 里是一张真正的表格，可以直接贴进组会报告。" },
       ] },
     { id: "project_list", name: "所有课题", lede: "横着看一眼：每个课题有多少文献、读了多少、走到哪一版假说、花了多少。不花钱。",
       cmd: "project_list", fields: [] },
@@ -333,7 +397,87 @@ function fieldNode(field, store) {
   label.textContent = field.label + (field.required ? " *" : "");
   wrap.append(label);
 
-  if (field.type === "files" || field.type === "file" || field.type === "dir") {
+  if (field.type === "articles") {
+    // Tick papers already in the library, or pick files — both end up in one
+    // list, and the command imports any file before it starts.
+    const picked = new Set();
+    const files = [];
+    const list = document.createElement("div");
+    list.className = "articles";
+    const summary = document.createElement("div");
+    summary.className = "picked";
+    const chips = document.createElement("div");
+    chips.className = "files";
+    const recount = () => {
+      const n = picked.size + files.length;
+      summary.textContent = n ? `已选 ${n} 篇` : "还没选";
+    };
+    const redrawFiles = () => {
+      chips.innerHTML = "";
+      files.forEach((path, index) => {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.append(document.createTextNode(path.split(/[\\/]/).pop() || path));
+        const remove = document.createElement("button");
+        remove.textContent = "×";
+        remove.title = path;
+        remove.onclick = () => { files.splice(index, 1); redrawFiles(); recount(); };
+        chip.append(remove);
+        chips.append(chip);
+      });
+    };
+
+    const loading = document.createElement("div");
+    loading.className = "empty";
+    loading.textContent = "正在读文献库…";
+    list.append(loading);
+    api(`/api/articles?p=${encodeURIComponent(STATE.project || "")}`).then(data => {
+      list.innerHTML = "";
+      if (!data.articles.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "这个课题的文献库还是空的。直接用下面的按钮选 PDF 就行，会先导入。";
+        list.append(empty);
+        return;
+      }
+      for (const article of data.articles) {
+        const row = document.createElement("label");
+        row.className = "article";
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.onchange = () => { box.checked ? picked.add(article.id) : picked.delete(article.id); recount(); };
+        const id = document.createElement("code");
+        id.textContent = article.id;
+        const title = document.createElement("span");
+        title.textContent = article.title + (article.year ? ` (${article.year})` : "");
+        const read = document.createElement("span");
+        read.className = "read";
+        read.textContent = article.read ? "已提炼" : "";
+        row.append(box, id, title, read);
+        list.append(row);
+      }
+    }).catch(error => {
+      list.innerHTML = "";
+      const failed = document.createElement("div");
+      failed.className = "empty";
+      failed.textContent = "读不到文献库：" + error.message;
+      list.append(failed);
+    });
+
+    const pick = document.createElement("button");
+    pick.className = "ghost";
+    pick.textContent = "也可以直接选文件…";
+    pick.onclick = async () => {
+      const path = await openPicker(false);
+      if (!path) return;
+      files.push(path);
+      redrawFiles();
+      recount();
+    };
+    recount();
+    wrap.append(list, summary, chips, document.createElement("div"), pick);
+    store[field.key] = () => [...picked, ...files];
+  } else if (field.type === "files" || field.type === "file" || field.type === "dir") {
     const chosen = [];
     const box = document.createElement("div");
     box.className = "files";
@@ -369,6 +513,7 @@ function fieldNode(field, store) {
     if (field.type !== "area") input.type = field.type === "number" ? "number" : "text";
     if (field.step) input.step = field.step;
     if (field.value) input.value = field.value;
+    if (field.placeholder) input.placeholder = field.placeholder;
     wrap.append(input);
     store[field.key] = () => {
       const raw = input.value.trim();
@@ -388,15 +533,22 @@ function fieldNode(field, store) {
 
 // ------------------------------------------------------------------ 跑与输出
 
+const MINDMAP_PREFIX = "⟨导图⟩ ";
+
 function runner(panel) {
   const output = document.createElement("pre");
   output.className = "out";
   const status = document.createElement("div");
   status.className = "status";
-  panel.append(status, output);
+  const diagram = document.createElement("div");
+  diagram.className = "mindmap";
+  diagram.hidden = true;
+  panel.append(status, diagram, output);
 
   return async function run(command, args, { onLine, onDone, linkify } = {}) {
     output.textContent = "";
+    diagram.hidden = true;
+    diagram.innerHTML = "";
     status.className = "status run";
     status.textContent = "正在运行…";
     let job;
@@ -414,6 +566,11 @@ function runner(panel) {
     const source = new EventSource(`/api/stream?job=${encodeURIComponent(job.job)}&t=${encodeURIComponent(TOKEN)}`);
     source.addEventListener("line", event => {
       const text = JSON.parse(event.data).text;
+      if (text.startsWith(MINDMAP_PREFIX)) {
+        try { drawMindmap(diagram, JSON.parse(text.slice(MINDMAP_PREFIX.length))); }
+        catch (error) { /* the text tree below is still there */ }
+        return;
+      }
       if (onLine) onLine(text);
       output.textContent += text + "\n";
       output.scrollTop = output.scrollHeight;
@@ -437,6 +594,52 @@ function runner(panel) {
       status.textContent = "连接断了。这个窗口关掉再从终端里的网址重开。";
     };
   };
+}
+
+function drawMindmap(container, data) {
+  const kids = {};
+  for (const node of data.nodes) (kids[node.parent] = kids[node.parent] || []).push(node);
+  const root = data.nodes.find(node => node.id === data.root);
+  if (!root) return;
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = `共 ${data.chars} 字` + (data.limit ? `（上限 ${data.limit}）` : "（不限字数）");
+  if (data.multi) {
+    for (const [label, text] of Object.entries(data.legend)) {
+      const line = document.createElement("div");
+      line.textContent = `${label}  ${text}`;
+      meta.append(line);
+    }
+  }
+
+  const item = (node, depth) => {
+    const li = document.createElement("li");
+    const box = document.createElement("span");
+    box.className = `node d${Math.min(depth, 4)}`;
+    box.textContent = node.text;
+    if (data.multi && node.source) {
+      const tag = document.createElement("span");
+      tag.className = "src";
+      tag.textContent = node.source;
+      box.append(tag);
+    }
+    li.append(box);
+    const children = kids[node.id] || [];
+    if (children.length) {
+      const ul = document.createElement("ul");
+      for (const child of children) ul.append(item(child, depth + 1));
+      li.append(ul);
+    }
+    return li;
+  };
+
+  const tree = document.createElement("ul");
+  tree.className = "mm";
+  tree.append(item(root, 0));
+  container.innerHTML = "";
+  container.append(meta, tree);
+  container.hidden = false;
 }
 
 // ---------------------------------------------------------------------- 视图
@@ -478,6 +681,11 @@ function show(id) {
     for (const field of task.fields) {
       if (field.required && !(field.key in args)) {
         alert(`还没填：${field.label}`);
+        return;
+      }
+      const chosen = Array.isArray(args[field.key]) ? args[field.key].length : 0;
+      if (field.min && chosen < field.min) {
+        alert(`至少要选 ${field.min} 篇，现在是 ${chosen} 篇。`);
         return;
       }
     }
