@@ -264,22 +264,28 @@ CONFIRM_ABOVE = 1.00
 NOTICE = "⟨系统⟩ "
 
 
-def _confirm_spend(estimate: float | None, args) -> bool:
+def _confirm_spend(estimate: float | None, args, *, ceiling: bool = True) -> bool:
     """Ask before a large spend. Returns False when the researcher declines.
 
     A job this size run from a script with no ceiling is the case worth
     refusing rather than guessing at: without a terminal there is nobody to
     answer, and proceeding silently is how a batch job becomes a surprise bill.
+
+    `ceiling` says whether the command enforces --max-cost. The hint used to
+    recommend it everywhere, and `eval` accepted the flag only so this function
+    could read it — so it skipped the question and set no ceiling at all.
     """
-    if getattr(args, "yes", False) or args.max_cost is not None:
+    if getattr(args, "yes", False) or getattr(args, "max_cost", None) is not None:
         return True
     if estimate is None or estimate < CONFIRM_ABOVE:
         return True
 
     if not sys.stdin.isatty():
+        remedy = ("Re-run with --max-cost to set a ceiling, or --yes to accept."
+                  if ceiling else "Re-run with --yes to accept.")
         print(
             f"\nThis is estimated at ${estimate:.2f} and nothing is watching for an "
-            "answer. Re-run with --max-cost to set a ceiling, or --yes to accept.",
+            f"answer. {remedy}",
             file=sys.stderr,
         )
         return False
@@ -1159,7 +1165,7 @@ def cmd_eval(args, cfg: Config) -> int:
     if paid:
         print(f"要跑 {len(cases) - len(paid)} 条免费用例和 {len(paid)} 条要调用模型的，"
               f"大约 ${0.2 * len(paid):.2f}（Claude；DeepSeek 便宜得多）。")
-        if not _confirm_spend(0.2 * len(paid), args):
+        if not _confirm_spend(0.2 * len(paid), args, ceiling=False):
             return 2
 
     report = evaluation.run(
@@ -1450,7 +1456,6 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Print the full output of any case that missed something")
     p.add_argument("-o", "--output", help="Write the result as JSON")
     p.add_argument("-y", "--yes", action="store_true", help="Skip the confirmation")
-    p.add_argument("--max-cost", type=float, help=argparse.SUPPRESS)
 
     add("usage", cmd_usage, "Show token usage and what it has cost")
 

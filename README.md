@@ -732,7 +732,7 @@ mra/
   usage.py        Token 用量与花费
   prompts/*.md    所有提示词，Markdown 明文，可直接改
 examples/         示例语料（可直接 mra import）
-tests/            217 个测试，全部离线运行
+tests/            700 多个测试，全部离线运行
 docs/PROPOSAL.md  条款式 + 提纲式方案书
 ```
 
@@ -745,7 +745,7 @@ docs/PROPOSAL.md  条款式 + 提纲式方案书
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q          # 217 passed，不需要 API key 和网络
+python -m pytest -q          # 全部离线通过，不需要 API key 和网络
 ```
 
 测试覆盖：PubMed XML 解析、FTS5 检索与排序、假说版本化、AI 痕迹评分与句子切分、

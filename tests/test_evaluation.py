@@ -336,3 +336,37 @@ class TestWebPanel:
 
         argv = webui.build_argv("eval", {"baseline": "claude-opus-5", "yes": True})
         assert "--baseline=claude-opus-5" in argv
+
+
+class TestSpendConfirmation:
+    """`eval` accepted a hidden --max-cost only so the confirmation could read
+    it, and the confirmation then told people to use it "to set a ceiling" —
+    one that eval never enforced."""
+
+    def _run_unattended(self, monkeypatch, tmp_path, *args):
+        import io
+
+        from mra import cli
+
+        monkeypatch.setattr(evaluation, "run", lambda *a, **k: pytest.fail("ran without consent"))
+        monkeypatch.setattr("sys.stdin", io.StringIO(""))  # not a terminal
+        return cli.main(["--workspace", str(tmp_path / ".mra"), "eval", *args])
+
+    def test_unattended_eval_names_only_the_flag_it_has(self, monkeypatch, tmp_path, capsys):
+        assert self._run_unattended(monkeypatch, tmp_path) == 2
+        err = capsys.readouterr().err
+        assert "--yes" in err and "--max-cost" not in err
+
+    def test_eval_no_longer_pretends_to_take_a_ceiling(self, monkeypatch, tmp_path):
+        with pytest.raises(SystemExit):
+            self._run_unattended(monkeypatch, tmp_path, "--max-cost", "1")
+
+    def test_commands_with_a_real_ceiling_still_offer_it(self, capsys, monkeypatch):
+        import io
+        from types import SimpleNamespace
+
+        from mra import cli
+
+        monkeypatch.setattr("sys.stdin", io.StringIO(""))
+        assert cli._confirm_spend(5.0, SimpleNamespace(yes=False, max_cost=None)) is False
+        assert "--max-cost" in capsys.readouterr().err

@@ -255,3 +255,28 @@ def test_the_long_path_check_passes_the_path_as_an_argument(raw: str):
     line = next(line for line in raw.split("\r\n") if "sys.argv[1]" in line)
     assert '"%~dp0."' in line
     assert '\\"' not in line
+
+
+def test_every_command_line_the_launcher_builds_parses(lines: list[str]):
+    """A typo'd flag in a menu item fails only when someone picks that item,
+    on their machine, as an argparse error. Each `mra` line here is filled with
+    plausible values and handed to the real parser."""
+    import shlex
+
+    from mra.cli import build_parser
+
+    # What the launcher actually puts in each: PROJARG is a whole flag.
+    numeric = {"LIMIT": "300", "PROJARG": "--project=sample"}
+    checked = 0
+    for number, line in enumerate(lines, 1):
+        if "-m mra" not in line or PROSE.match(line):
+            continue
+        command = line.split("-m mra", 1)[1]
+        command = re.sub(r"%(\w+)%", lambda m: numeric.get(m.group(1), "sample"), command)
+        argv = [t for t in shlex.split(command) if not re.match(r"^\d?>", t)]
+        try:
+            build_parser().parse_args(argv)
+        except SystemExit:
+            pytest.fail(f"line {number}: `mra {' '.join(argv)}` does not parse")
+        checked += 1
+    assert checked >= 20, "fewer command lines than expected — did the format change?"

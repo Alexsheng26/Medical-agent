@@ -258,6 +258,10 @@ if "%CHOICE%"=="11" goto :do_status
 if "%CHOICE%"=="12" goto :do_key
 if "%CHOICE%"=="13" goto :do_projects
 if "%CHOICE%"=="14" goto :do_switch
+if "%CHOICE%"=="15" goto :do_mindmap
+if "%CHOICE%"=="16" goto :do_compare
+if "%CHOICE%"=="17" goto :do_rebuttal
+if "%CHOICE%"=="18" goto :do_export
 if "%CHOICE%"=="0" goto :done
 echo   没有这个选项，请重新选。
 goto :menu
@@ -301,6 +305,54 @@ if not defined DATAF goto :menu
 set "NOTE="
 set /p "NOTE=补充说明（例如 n=12/组，可直接回车跳过）: "
 "%RUN%" -m mra %PROJARG% assess %DATAF% --notes "%NOTE%"
+goto :after
+
+:do_mindmap
+"%RUN%" -m mra %PROJARG% library
+echo.
+echo   输入要画的文献编号（上面第一列，多篇用空格隔开），也可以直接把 PDF 拖进来。
+set "ITEMS="
+set /p "ITEMS=编号或文件: "
+if not defined ITEMS goto :menu
+set "LIMIT="
+set /p "LIMIT=字数上限（直接回车 = 300，0 = 不限）: "
+if not defined LIMIT set "LIMIT=300"
+set "FOCUS="
+set /p "FOCUS=你的要求（例如 给本科生讲，可直接回车跳过）: "
+"%RUN%" -m mra %PROJARG% mindmap %ITEMS% --limit %LIMIT% --focus "%FOCUS%" -o 思维导图.md
+goto :after
+
+:do_compare
+"%RUN%" -m mra %PROJARG% library
+echo.
+echo   输入至少两篇的编号（上面第一列，用空格隔开），也可以直接把 PDF 拖进来。
+set "ITEMS="
+set /p "ITEMS=编号或文件: "
+if not defined ITEMS goto :menu
+set "FOCUS="
+set /p "FOCUS=你的要求（例如 侧重研究设计，可直接回车跳过）: "
+"%RUN%" -m mra %PROJARG% compare %ITEMS% --focus "%FOCUS%" -o 异同比较.md
+goto :after
+
+:do_rebuttal
+echo.
+echo   先把审稿意见（存成 txt 或 md）拖进窗口回车，再拖投出去的那版稿子。
+set "REVIEWS="
+set /p "REVIEWS=审稿意见: "
+if not defined REVIEWS goto :menu
+set "MANUSCRIPT="
+set /p "MANUSCRIPT=稿子: "
+if not defined MANUSCRIPT goto :menu
+"%RUN%" -m mra %PROJARG% rebuttal %REVIEWS% --manuscript %MANUSCRIPT% -o 回复信.md
+goto :after
+
+:do_export
+echo.
+echo   导出整个文献库，给 EndNote / Zotero / NoteExpress 导入。
+set "OUT="
+set /p "OUT=文件名（直接回车 = 文献库.ris，写 .bib 就是 BibTeX）: "
+if not defined OUT set "OUT=文献库.ris"
+"%RUN%" -m mra %PROJARG% export -o "%OUT%"
 goto :after
 
 :do_library
