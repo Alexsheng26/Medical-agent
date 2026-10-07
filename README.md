@@ -580,6 +580,24 @@ mra refs proposal.md            # 发现伪造引用时返回退出码 1，可�
 
 无法支撑的论断会被标成 `[CITATION NEEDED]` 而不是编一条引用。缺引用比假引用好得多。
 
+### 参考文献交给 EndNote / Zotero / NoteExpress
+
+稿子里的 `[PMID:x]` 核对完，参考文献的排版交给你本来就在用的文献管理软件：
+
+```bash
+mra refs 稿子.md --export 参考文献.ris     # 稿子引用到的，按文中出现顺序
+mra export -o 文献库.ris                   # 整个文献库
+mra export 31234567 28001122 -o 两篇.bib   # 只导出这几篇；.bib 给 LaTeX
+```
+
+`.ris` 三个软件都能导入（EndNote：文件 → 导入 → 文件，导入选项选 Reference Manager (RIS)，
+文本转换选 Unicode (UTF-8)）。**只导出库里核对得上的**——查不到的那条正是不能进参考文献的那条，
+会单独列出来。网页里是「引用核对」下面的导出框，以及「文献库」下的「导出文献」。
+
+能不能排出完整的参考文献，取决于**卷、期、页码**。0.9.1 之前的版本没有存这几项；旧文献库打开时
+会自动加上这几列，**重新导入一次同一个 PubMed XML（或同一个 PDF）就会补齐**，已有的内容一个字
+都不会被改。导出时缺这几项的会被点名，并告诉你怎么补。
+
 **2. 数据不出本地（QA-3）。** 知识库是一个 SQLite 文件，草稿是本地 Markdown。
 检索用 SQLite FTS5 的 BM25，**不需要 embedding 模型、不需要向量数据库、不需要额外联网服务**。
 只有你显式发起的那次调用会把内容发给模型。`.gitignore` 已排除 `.mra/`、`data/`、`samples/`。
@@ -640,11 +658,11 @@ Re-run with --max-cost to set a ceiling, or --yes to accept.
 | `mra polish FILE` | 迭代去 AI 化 | ✓ |
 | `mra finalize FILE` | v1 + v2 + 报告 | ✓ |
 | `mra rebuttal FILE --manuscript M` | 逐条分类 + 回复审稿意见 | ✓ |
-| `mra refs FILE` | 引用真实性核对 | |
+| `mra refs FILE` | 引用真实性核对（`--export x.ris` 导出给 EndNote） | |
 | `mra fingerprint DIR` | 学习你的文风 | ✓ |
 | `mra memory --refresh` | 课题方向图谱 | |
 | `mra usage` | Token 用量与花费明细 | |
-| `mra export` | 全量导出 JSON | |
+| `mra export [ID…] -o x.ris` | 导出给 EndNote / Zotero（.ris）、LaTeX（.bib），或全量 JSON | |
 
 `import` / `lint` / `refs` / `memory` / `usage` / `status` / `guide` **完全离线**，没有 API key 也能跑。
 

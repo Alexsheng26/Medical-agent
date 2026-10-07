@@ -13,7 +13,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+# rispy and bibtexparser let tests/test_bibliography.py check exports with
+# parsers that are not ours; without them those two tests skip.
+dev = ["pytest>=8.0", "rispy>=0.9", "bibtexparser>=1.4,<2"]
 # Optional: lets tests/test_webui.py drive the page in a real browser. Without
 # it those six tests skip and the rest still run.
 browser = ["playwright>=1.40"]

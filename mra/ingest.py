@@ -216,6 +216,9 @@ def to_article(doc: ExtractedDoc, meta, *, pmid: str = "", doi: str = "") -> Art
         doi=doi or (getattr(meta, "doi", "") or "").strip(),
         publication_types=["Local full text"],
         mesh_terms=list(getattr(meta, "keywords", []) or []),
+        volume=(getattr(meta, "volume", "") or "").strip(),
+        issue=(getattr(meta, "issue", "") or "").strip(),
+        pages=(getattr(meta, "pages", "") or "").strip(),
     )
 
 

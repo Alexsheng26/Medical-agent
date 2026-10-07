@@ -118,10 +118,20 @@ def reference_list(text: str, store: Store) -> str:
         else:
             lines.append(
                 f"{index}. {authors}. {title} "
-                f"{article.journal_abbrev or article.journal}. {article.year}. "
-                f"PMID:{article.pmid}{doi}"
+                f"{article.journal_abbrev or article.journal}. {article.year}"
+                f"{_volume_and_pages(article)}. PMID:{article.pmid}{doi}"
             )
     return "\n".join(lines)
+
+
+def _volume_and_pages(article) -> str:
+    """Vancouver style: ";70(3):1234-45". Empty when the record has neither."""
+    part = f";{article.volume}" if article.volume else ""
+    if article.volume and article.issue:
+        part += f"({article.issue})"
+    if article.pages:
+        part += f":{article.pages}" if part else f";{article.pages}"
+    return part
 
 
 def _terminate(title: str) -> str:

@@ -31,7 +31,10 @@ CREATE TABLE IF NOT EXISTS articles (
     publication_types TEXT NOT NULL DEFAULT '[]',
     mesh_terms      TEXT NOT NULL DEFAULT '[]',
     topic           TEXT NOT NULL DEFAULT '',
-    added_at        TEXT NOT NULL
+    added_at        TEXT NOT NULL,
+    volume          TEXT NOT NULL DEFAULT '',
+    issue           TEXT NOT NULL DEFAULT '',
+    pages           TEXT NOT NULL DEFAULT ''
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5(
@@ -112,7 +115,21 @@ class Store:
         self.conn = sqlite3.connect(path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._add_missing_columns()
         self.conn.commit()
+
+    # Columns added after the first release. CREATE TABLE IF NOT EXISTS leaves
+    # an existing table alone, so a library created earlier needs them added.
+    LATER_COLUMNS = {"articles": ("volume", "issue", "pages")}
+
+    def _add_missing_columns(self) -> None:
+        for table, columns in self.LATER_COLUMNS.items():
+            present = {row[1] for row in self.conn.execute(f"PRAGMA table_info({table})")}
+            for column in columns:
+                if column not in present:
+                    self.conn.execute(
+                        f"ALTER TABLE {table} ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
+                    )
 
     def close(self) -> None:
         self.conn.close()
@@ -130,12 +147,14 @@ class Store:
         added = 0
         for article in articles:
             if self.has_article(article.pmid):
+                self.fill_missing(article)
                 continue
             self.conn.execute(
                 """INSERT INTO articles
                    (pmid, title, abstract, journal, journal_abbrev, year, authors,
-                    doi, publication_types, mesh_terms, topic, added_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    doi, publication_types, mesh_terms, topic, added_at,
+                    volume, issue, pages)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     article.pmid,
                     article.title,
@@ -149,6 +168,9 @@ class Store:
                     json.dumps(article.mesh_terms, ensure_ascii=False),
                     topic,
                     _now(),
+                    article.volume,
+                    article.issue,
+                    article.pages,
                 ),
             )
             self.conn.execute(
@@ -158,6 +180,38 @@ class Store:
             added += 1
         self.conn.commit()
         return added
+
+    # Bibliographic fields a re-import may supply for a record stored without
+    # them. Text, title and authors are never touched: they may have been read
+    # and cited already, and the stored version is the one that was checked.
+    FILLABLE = ("volume", "issue", "pages", "doi", "journal", "journal_abbrev", "year")
+
+    def fill_missing(self, article: Article) -> int:
+        """Fill blank bibliographic fields of a stored record. Never overwrites.
+
+        Libraries built before volume, issue and pages were kept have none, and
+        a reference export without them is not usable. Importing the same
+        PubMed XML or PDF again now completes them. Returns how many fields
+        were filled.
+        """
+        row = self.conn.execute(
+            f"SELECT {', '.join(self.FILLABLE)} FROM articles WHERE pmid = ?", (article.pmid,)
+        ).fetchone()
+        if row is None:
+            return 0
+        updates = {
+            name: getattr(article, name)
+            for name in self.FILLABLE
+            if not row[name] and getattr(article, name, "")
+        }
+        if updates:
+            assignments = ", ".join(f"{name} = ?" for name in updates)
+            self.conn.execute(
+                f"UPDATE articles SET {assignments} WHERE pmid = ?",
+                (*updates.values(), article.pmid),
+            )
+            self.conn.commit()
+        return len(updates)
 
     def has_article(self, pmid: str) -> bool:
         row = self.conn.execute("SELECT 1 FROM articles WHERE pmid = ?", (pmid,)).fetchone()
@@ -388,6 +442,9 @@ def _row_to_article(row: sqlite3.Row) -> Article:
         doi=row["doi"],
         publication_types=json.loads(row["publication_types"]),
         mesh_terms=json.loads(row["mesh_terms"]),
+        volume=row["volume"],
+        issue=row["issue"],
+        pages=row["pages"],
     )
 
 

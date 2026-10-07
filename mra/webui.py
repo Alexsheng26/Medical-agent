@@ -72,6 +72,9 @@ class Spec:
     positional: str = ""
     repeated: bool = False
     options: dict[str, Option] = field(default_factory=dict)
+    # A repeated positional that may be empty: `export` with nothing ticked
+    # means the whole library.
+    optional: bool = False
 
 
 _NOTES = Option("--notes")
@@ -178,7 +181,10 @@ COMMANDS: dict[str, Spec] = {
         },
     ),
     "finalize": Spec(positional="file", options={"journal": _JOURNAL}),
-    "refs": Spec(positional="file", options={"list": Option("--list", "bool")}),
+    "refs": Spec(positional="file", options={
+        "list": Option("--list", "bool"), "export": Option("--export"),
+    }),
+    "export": Spec(positional="items", repeated=True, optional=True, options={"output": _OUTPUT}),
     "lint": Spec(positional="file"),
     "fingerprint": Spec(positional="directory"),
     "journal_add": Spec(
@@ -222,7 +228,7 @@ def build_argv(command: str, payload: dict[str, Any]) -> list[str]:
         value = payload.get(spec.positional)
         if spec.repeated:
             items = value if isinstance(value, list) else ([value] if value else [])
-            if not items:
+            if not items and not spec.optional:
                 raise ValueError(f"{command} 需要至少一个 {spec.positional}")
             argv.extend(_positional(item) for item in items)
         elif value not in (None, ""):

@@ -15,6 +15,11 @@ Rules:
 - `doi` without the `https://doi.org/` prefix.
 - `pmid` only if the document actually prints one. Do not derive it from
   anything else.
+- `volume`, `issue`, `pages` as printed in the citation line or running header,
+  e.g. "Hepatology 2019;70(3):1234–1245" → volume 70, issue 3, pages 1234-1245.
+  An online-only journal prints an article number instead of pages (e0185809);
+  use that. These go into the researcher's reference list, so a wrong one is
+  worse than a blank.
 - If the text is too garbled to read reliably, return empty fields. That result
   is useful — it tells the researcher this file needs attention.
 

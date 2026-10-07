@@ -245,6 +245,13 @@ const TASKS = [
       cmd: "library", linkify: true, fields: [
         { key: "id", type: "text", label: "文献编号", hint: "留空 = 列出全部。填一个编号 = 看那一篇的完整提炼结果（也可以直接点下面列表里的编号）。" },
       ] },
+    { id: "export", name: "导出文献",
+      lede: "导出成 EndNote、Zotero、NoteExpress 能直接导入的文件，按期刊格式排参考文献用。不花钱。",
+      cmd: "export", fields: [
+        { key: "items", type: "articles", label: "选要导出的文献（一篇都不勾 = 整个文献库）" },
+        { key: "output", type: "text", label: "导出到", value: "文献库.ris", required: true,
+          hint: ".ris 给 EndNote / Zotero / NoteExpress；.bib 给 LaTeX。文件在当前课题的文件夹里。" },
+      ] },
     { id: "mindmap", name: "思维导图",
       lede: "一篇或几篇画成一张图。字数由程序数：超了先让它重画一次，还超就从最末端的小分支剪，剪掉了什么会列出来。",
       cmd: "mindmap", fields: [
@@ -305,6 +312,9 @@ const TASKS = [
       cmd: "refs", fields: [
         { key: "file", type: "file", label: "文稿", required: true },
         { key: "list", type: "check", label: "同时输出参考文献列表", checked: true },
+        { key: "export", type: "text", label: "把引用到的文献导出给 EndNote / Zotero（可选）",
+          placeholder: "参考文献.ris",
+          hint: ".ris 给 EndNote、Zotero、NoteExpress；.bib 给 LaTeX。只导出库里核对得上的那些，按文中引用顺序。" },
       ] },
     { id: "lint", name: "AI 痕迹检查", lede: "确定性的静态检查，不调用模型。不花钱。",
       cmd: "lint", fields: [{ key: "file", type: "file", label: "文稿", required: true }] },

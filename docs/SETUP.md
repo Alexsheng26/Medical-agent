@@ -237,7 +237,7 @@ mra web --port 8790
 网页里能做的事和菜单一一对应，输出实时往下滚——**它跑的就是同一条命令**，
 所以成本闸、引用核验、报错信息全都一样，不存在"网页版和命令行版不一致"。
 
-需要命令行才有的：`sync`（无人值守跑批）、`watch`、`export`、`diff`、`nativize`、
+需要命令行才有的：`sync`（无人值守跑批）、`watch`、`diff`、`nativize`、
 `polish`、`memory --refresh`。
 
 ---

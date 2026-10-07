@@ -164,6 +164,8 @@ def import_files(
         if store.has_article(article.pmid):
             skipped += 1
             warnings.append(f"{path.name}: already in the knowledge base as {article.pmid}")
+            # The metadata was read again; fill whatever the stored record lacks.
+            store.fill_missing(article)
         else:
             added += store.add_articles([article], topic=topic)
 

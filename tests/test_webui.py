@@ -389,3 +389,21 @@ class TestPickingPapersInTheBrowser:
         assert page.inner_text(".mm .d0") == "中心"
         assert "共 9 字（上限 300）" in page.inner_text(".mindmap .meta")
         assert page.failures == []
+
+
+class TestExportInBrowser:
+    def test_exporting_with_nothing_ticked_writes_the_whole_library(self, page, server):
+        workspace = _workspace_of(server)
+        _seed(workspace)
+        target = workspace.parent / "文献库.ris"
+        target.unlink(missing_ok=True)
+
+        page.get_by_role("button", name="导出文献").click()
+        page.wait_for_selector(".article", timeout=10_000)
+        page.get_by_role("button", name="开始").click()
+        page.wait_for_function(
+            "() => document.querySelector('.status')?.textContent === '完成。'", timeout=30_000
+        )
+        assert "已导出 8 篇" in page.inner_text("pre.out")
+        assert target.read_text(encoding="utf-8").count("ER  - ") == 8
+        assert page.failures == []

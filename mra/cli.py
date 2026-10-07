@@ -45,6 +45,7 @@ GUIDE = """
   第四步 对标评估      mra assess data.csv --journal Hepatology  # 对着该刊门槛再评一次
   第五步 写作          mra draft results --journal Hepatology --data data.csv -o results.md
                        mra finalize results.md --journal Hepatology
+                       mra refs results.md --export 参考文献.ris  # 交给 EndNote 排参考文献
   第六步 回复审稿      mra rebuttal reviews.txt --manuscript ms.md --data data.csv -o reply.md
   长期沉淀            mra fingerprint ./my_papers      # 学习你自己的文风
                        mra memory --refresh            # 课题方向图谱
@@ -1065,7 +1066,28 @@ def cmd_refs(args, cfg: Config) -> int:
         if args.list:
             print("\nReferences:\n")
             print(citations.reference_list(text, store))
+        if args.export:
+            # Only what verified: a citation the library cannot resolve is
+            # exactly the one that must not reach the reference manager.
+            articles = [a for a in (store.get_article(i) for i in report.verified) if a]
+            _write_bibliography(articles, args.export, cfg)
+            if report.unverified:
+                print(f"{NOTICE}库里查不到的 {len(report.unverified)} 条没有导出："
+                      f"{', '.join(report.unverified)}")
         return 0 if report.ok else 1
+
+
+def _write_bibliography(articles, output: str, cfg: Config) -> None:
+    from . import bibliography
+
+    path = _write_out(bibliography.export(articles, Path(output).suffix), output, cfg, "")
+    print(f"\n{NOTICE}已导出 {len(articles)} 篇到 {path}")
+    print(f"{NOTICE}{bibliography.IMPORT_HINT}")
+    if gaps := bibliography.incomplete(articles):
+        print(f"{NOTICE}其中 {len(gaps)} 篇缺卷号或页码，排出来的参考文献会不完整："
+              f"{', '.join(a.pmid for a in gaps[:8])}{' …' if len(gaps) > 8 else ''}")
+        print(f"{NOTICE}补法：PubMed 来的，重新导入一次同一个 XML 就会补上；"
+              "本地 PDF 重新导入一次会再读一遍首页；或者导入 EndNote 后用「查找参考文献更新」。")
 
 
 def cmd_fingerprint(args, cfg: Config) -> int:
@@ -1169,8 +1191,21 @@ def cmd_usage(args, cfg: Config) -> int:
 
 
 def cmd_export(args, cfg: Config) -> int:
-    """Dump the knowledge base as JSON so nothing is trapped in the tool."""
+    """Everything as JSON so nothing is trapped in the tool — or, with a .ris
+    or .bib output, the references for EndNote, Zotero and NoteExpress."""
+    from . import bibliography
+
     with _store(cfg) as store:
+        wanted = [selection.normalise_identifier(item) for item in args.items]
+        if missing := [item for item in wanted if not store.has_article(item)]:
+            raise ValueError(f"库里没有：{', '.join(missing)}。编号见「文献列表」第一列。")
+        identifiers = wanted or store.all_pmids()
+
+        if args.output and Path(args.output).suffix.lower() in bibliography.FORMATS:
+            articles = [a for a in (store.get_article(i) for i in identifiers) if a]
+            _write_bibliography(articles, args.output, cfg)
+            return 0
+
         data = {
             "articles": [],
             "hypotheses": [
@@ -1180,7 +1215,7 @@ def cmd_export(args, cfg: Config) -> int:
             ],
             "journals": {name: store.get_journal(name) for name in store.list_journals()},
         }
-        for pmid in store.all_pmids():
+        for pmid in identifiers:
             article = store.get_article(pmid)
             if article:
                 data["articles"].append(
@@ -1392,6 +1427,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = add("refs", cmd_refs, "Verify citations against the knowledge base (offline)")
     p.add_argument("file")
     p.add_argument("--list", action="store_true", help="Print a formatted reference list")
+    p.add_argument("--export", metavar="FILE",
+                   help="Also write the cited references: .ris for EndNote/Zotero/NoteExpress, .bib")
 
     p = add("fingerprint", cmd_fingerprint, "Learn your writing voice from your own papers")
     p.add_argument("directory", help="Directory of your prior papers as .txt")
@@ -1417,8 +1454,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     add("usage", cmd_usage, "Show token usage and what it has cost")
 
-    p = add("export", cmd_export, "Export everything as JSON")
-    p.add_argument("-o", "--output")
+    p = add("export", cmd_export,
+            "Export as JSON, or references as .ris (EndNote/Zotero) or .bib")
+    p.add_argument("items", nargs="*", help="Only these identifiers (default: all)")
+    p.add_argument("-o", "--output",
+                   help="export.json by default; a .ris or .bib name exports references")
 
     return parser
 

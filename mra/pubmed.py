@@ -38,6 +38,11 @@ class Article:
     doi: str = ""
     publication_types: list[str] = field(default_factory=list)
     mesh_terms: list[str] = field(default_factory=list)
+    # Volume, issue and pages: what a reference manager needs to format a
+    # bibliography. Missing until 0.9.1, so older records may lack them.
+    volume: str = ""
+    issue: str = ""
+    pages: str = ""
 
     @property
     def citation(self) -> str:
@@ -199,7 +204,31 @@ def _parse_article(node: ET.Element) -> Article | None:
             for mh in citation.findall("./MeshHeadingList/MeshHeading/DescriptorName")
             if _text(mh)
         ],
+        volume=_text(journal.find("./JournalIssue/Volume")) if journal is not None else "",
+        issue=_text(journal.find("./JournalIssue/Issue")) if journal is not None else "",
+        pages=_parse_pages(art),
     )
+
+
+def _parse_pages(art: ET.Element) -> str:
+    """Printed pages, or the article number of an online-only journal.
+
+    MEDLINE abbreviates the end page ("1234-45"); it is kept as printed here
+    and expanded where a reference manager needs it split.
+    """
+    pages = _text(art.find("./Pagination/MedlinePgn"))
+    if pages:
+        return pages
+    start = _text(art.find("./Pagination/StartPage"))
+    end = _text(art.find("./Pagination/EndPage"))
+    if start:
+        return f"{start}-{end}" if end else start
+    # PLOS, eLife, Nature Communications and the like have no pages, only an
+    # article number such as e0185809.
+    for location in art.findall("./ELocationID"):
+        if location.get("EIdType") != "doi" and _text(location):
+            return _text(location)
+    return ""
 
 
 def _parse_abstract(abstract: ET.Element | None) -> str:

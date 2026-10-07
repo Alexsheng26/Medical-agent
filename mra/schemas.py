@@ -340,6 +340,15 @@ class LocalArticleMeta(BaseModel):
     year: str = Field(description="Four-digit publication year; empty if absent")
     doi: str = Field(description="DOI without the https://doi.org/ prefix; empty if absent")
     pmid: str = Field(description="PMID if the document prints one; otherwise empty")
+    # Defaulted, unlike the fields above: added later, and a model that omits
+    # one must not cost the title and authors with it.
+    volume: str = Field(default="", description="Volume number as printed; empty if absent")
+    issue: str = Field(default="", description="Issue number as printed; empty if absent")
+    pages: str = Field(
+        default="",
+        description="Page range such as '1234-1245', or the article number of an "
+        "online-only journal such as 'e0185809'; empty if absent",
+    )
     keywords: list[str] = Field(description="Author keywords or MeSH-like terms, if listed")
     document_type: str = Field(
         description="One of: research article, review, preprint, thesis, protocol, "
