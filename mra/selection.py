@@ -17,7 +17,7 @@ import string
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import pipeline
+from . import fulltext, pipeline
 from .config import Config
 from .llm import LLM
 from .pubmed import Article
@@ -169,15 +169,8 @@ def _card_text(card: dict) -> str:
 
 
 def trim(text: str, limit: int) -> str:
-    """Keep the opening and the end of a long text, as `digest` does."""
-    if len(text) <= limit:
-        return text
-    head = int(limit * pipeline.DIGEST_HEAD_SHARE)
-    tail = limit - head
-    return (
-        f"{text[:head]}\n\n[... {len(text) - limit} characters omitted from the middle ...]\n\n"
-        f"{text[-tail:]}"
-    )
+    """The same budgeting `digest` uses: references first, tables kept."""
+    return fulltext.fit(text, limit)
 
 
 def by_label(papers: list[Paper]) -> dict[str, Paper]:

@@ -22,6 +22,14 @@ from .pubmed import Article
 
 log = logging.getLogger(__name__)
 
+# pypdf narrates its own internals at WARNING — on one Elsevier paper, 57 lines
+# and 58 KB of font dictionaries ("fontTools is required to fully parse the
+# encoding of a CFF Type1 font…") printed over the import, in the terminal and
+# in the browser, about a file whose text had extracted correctly. Nothing in
+# them is actionable by a researcher. Failures that are — an unreadable file, a
+# scan with no text layer — are reported through ExtractedDoc.warnings instead.
+logging.getLogger("pypdf").setLevel(logging.ERROR)
+
 PDF_SUFFIXES = {".pdf"}
 TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".text"}
 XML_SUFFIXES = {".xml", ".nbib"}

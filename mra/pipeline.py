@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import ingest, prompts
+from . import fulltext, ingest, prompts
 from .config import Config
 from .llm import LLM
 from .pubmed import PubMed, PubMedError, parse_efetch_xml
@@ -26,7 +26,7 @@ DIGEST_TEXT_LIMIT = 24000
 # introduction and methods, and Results never arrived. Results and Discussion
 # are where the numbers and the authors' own caveats live, so the tail is worth
 # more per character than the middle of the Methods.
-DIGEST_HEAD_SHARE = 0.55
+DIGEST_HEAD_SHARE = 0.55  # kept for callers; fulltext.HEAD_SHARE is what is used
 
 # For the pre-flight estimate. Observed on real runs: the extraction prompt adds
 # roughly this much around each paper, and a LitCard comes back near this size.
@@ -35,17 +35,8 @@ DIGEST_OUTPUT_TOKENS = 2100
 
 
 def _trim_for_digest(text: str) -> str:
-    """Keep the opening and the closing of a long paper, drop the middle."""
-    if len(text) <= DIGEST_TEXT_LIMIT:
-        return text
-    head = int(DIGEST_TEXT_LIMIT * DIGEST_HEAD_SHARE)
-    tail = DIGEST_TEXT_LIMIT - head
-    return (
-        f"{text[:head]}\n\n"
-        f"[... {len(text) - DIGEST_TEXT_LIMIT} characters omitted from the middle "
-        f"of the paper — typically detailed methods ...]\n\n"
-        f"{text[-tail:]}"
-    )
+    """What one reading of a long paper sees — see mra/fulltext.py."""
+    return fulltext.fit(text, DIGEST_TEXT_LIMIT)
 
 
 @dataclass
