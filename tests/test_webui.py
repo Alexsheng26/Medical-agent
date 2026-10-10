@@ -407,3 +407,36 @@ class TestExportInBrowser:
         assert "已导出 8 篇" in page.inner_text("pre.out")
         assert target.read_text(encoding="utf-8").count("ER  - ") == 8
         assert page.failures == []
+
+
+class TestFindingsAreNotErrors:
+    """refs and eval exit 1 to say "found something", so a script can stop on
+    it. The page read that as a crash, and the first person to run the
+    self-check came back with a screenshot of "出错了（退出码 1）" over a
+    26-of-27 result."""
+
+    def test_an_unverifiable_citation_reads_as_a_result(self, page, server):
+        workspace = _workspace_of(server)
+        _seed(workspace)
+        draft = workspace.parent / "draft-with-a-fake.md"
+        draft.write_text("Real [PMID:31234567]. Invented [PMID:99999999].", encoding="utf-8")
+
+        page.get_by_role("button", name="引用核对").click()
+        page.get_by_role("button", name="选择文件…").click()
+        page.get_by_role("button", name="📄  draft-with-a-fake.md").click()
+        page.get_by_role("button", name="开始").click()
+        page.wait_for_function(
+            "() => /核对完了|出错了/.test(document.querySelector('.status')?.textContent || '')",
+            timeout=30_000,
+        )
+        status = page.locator(".status")
+        assert "核对完了" in status.inner_text() and "出错了" not in status.inner_text()
+        assert "note" in status.get_attribute("class")
+        assert "99999999" in page.inner_text("pre.out")
+
+    def test_the_self_check_shows_what_the_model_said_by_default(self):
+        page = webui.read_index().decode("utf-8")
+        panel = page[page.index('id: "eval"'):]
+        panel = panel[:panel.index("] }")]
+        assert '"show", type: "check", checked: true' in panel
+        assert webui.build_argv("eval", {"show": True}) == ["eval", "--show"]

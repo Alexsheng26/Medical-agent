@@ -102,6 +102,7 @@
   .status.run { color: var(--accent); }
   .status.ok { color: var(--ok); }
   .status.bad { color: var(--warn); }
+  .status.note { color: var(--accent); }
 
   .chat { display: flex; flex-direction: column; gap: 14px; }
   .msg { padding: 11px 14px; border-radius: var(--radius); max-width: 88%; white-space: pre-wrap; }
@@ -309,7 +310,8 @@ const TASKS = [
         { key: "samples", type: "dir", label: "全文样本目录", hint: "放 3–5 篇和你工作最接近的该刊论文，PDF 直接读。" },
       ] },
     { id: "refs", name: "引用核对", lede: "逐条核对文稿里的引用是否真在库里。不花钱。",
-      cmd: "refs", fields: [
+      cmd: "refs", findings: { 1: "核对完了：有引用在库里查不到，就是下面打 ✗ 的那几条。这不是程序出错。" },
+      fields: [
         { key: "file", type: "file", label: "文稿", required: true },
         { key: "list", type: "check", label: "同时输出参考文献列表", checked: true },
         { key: "export", type: "text", label: "把引用到的文献导出给 EndNote / Zotero（可选）",
@@ -336,7 +338,12 @@ const TASKS = [
   { group: "工具", items: [
     { id: "demo", name: "试用示例", lede: "把自带的示例语料和数据复制到数据目录，然后导入。不花钱。", demo: true },
     { id: "eval", name: "质量自检", lede: "拿一批已知有问题的材料跑一遍，看工具还抓不抓得出来。换模型、改提示词之后用它对比。",
-      cmd: "eval", fields: [
+      cmd: "eval", findings: { 1: "跑完了：有没抓到的条目，见下面「没抓到的」。这不是程序出错。" },
+      fields: [
+        { key: "show", type: "check", checked: true,
+          label: "没抓到的那几条，把模型当时的完整回答也显示出来（判断是模型漏了，还是检查标准太窄）" },
+        { key: "only", type: "text", label: "只跑其中一条（可选，填用例名）",
+          placeholder: "rebuttal-mixed-reviews" },
         { key: "free_only", type: "check", checked: false,
           label: "只跑不花钱的那两条 —— 勾上就不会测模型的判断力，只验引用核验和 AI 痕迹检查" },
         { key: "baseline", type: "text", value: "claude-opus-5",
@@ -555,7 +562,7 @@ function runner(panel) {
   diagram.hidden = true;
   panel.append(status, diagram, output);
 
-  return async function run(command, args, { onLine, onDone, linkify } = {}) {
+  return async function run(command, args, { onLine, onDone, linkify, findings } = {}) {
     output.textContent = "";
     diagram.hidden = true;
     diagram.innerHTML = "";
@@ -588,8 +595,14 @@ function runner(panel) {
     source.addEventListener("done", event => {
       const code = JSON.parse(event.data).code;
       source.close();
-      status.className = "status " + (code === 0 ? "ok" : "bad");
+      // Some commands exit 1 to say "I found something" — a citation the
+      // library cannot resolve, a check the model missed — so a script can
+      // stop on it. That is a result, not a crash, and reading it as
+      // "出错了" sent the first person to run the self-check looking for a fault.
+      const finding = findings && findings[code];
+      status.className = "status " + (code === 0 ? "ok" : finding ? "note" : "bad");
       status.textContent = code === 0 ? "完成。"
+        : finding ? finding
         : code === 2 ? "已到达设定的上限，干净停下了。"
         : `出错了（退出码 ${code}）。上面最后几行是原因。`;
       if (linkify && code === 0) linkifyIdentifiers(output, linkify);
@@ -702,6 +715,7 @@ function show(id) {
     go.disabled = true;
     run(task.cmd, args, {
       onDone: () => { go.disabled = false; },
+      findings: task.findings,
       // The list prints an identifier per row; typing one back in to read the
       // card is the kind of step a browser exists to remove.
       linkify: task.linkify ? (id => { store.id = () => id; go.click(); }) : null,

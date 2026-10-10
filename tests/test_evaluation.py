@@ -370,3 +370,66 @@ class TestSpendConfirmation:
         monkeypatch.setattr("sys.stdin", io.StringIO(""))
         assert cli._confirm_spend(5.0, SimpleNamespace(yes=False, max_cost=None)) is False
         assert "--max-cost" in capsys.readouterr().err
+
+
+class TestNewCasesAgainstAnOlderBaseline:
+    """The first real DeepSeek run reported "18 → 26（好了 8 条）". The baseline
+    had 18 checks and the run 27; all eight "improvements" were checks added
+    after the baseline was recorded."""
+
+    def _report(self, ids_and_caught):
+        return evaluation.Report(results=[
+            evaluation.Result(case, "x", "w", checks=[evaluation.Check("e", "w", caught)])
+            for case, caught in ids_and_caught
+        ])
+
+    def test_new_cases_are_not_counted_as_improvements(self):
+        baseline = evaluation.to_json(self._report([("a", True), ("b", True)]))
+        text = evaluation.format_report(
+            self._report([("a", True), ("b", True), ("new1", True), ("new2", False)]),
+            baseline=baseline,
+        )
+        assert "2 → 2（持平）" in text
+        assert "好了" not in text
+        assert "基线里没有的 2 条：这次抓到 1 条" in text
+
+    def test_a_real_change_in_the_overlap_still_shows_beside_new_cases(self):
+        baseline = evaluation.to_json(self._report([("a", True), ("b", True)]))
+        text = evaluation.format_report(
+            self._report([("a", True), ("b", False), ("new1", True)]), baseline=baseline
+        )
+        assert "2 → 1（差了 1 条）" in text
+
+
+class TestAbsenceChecks:
+    """"Did not promise X" cannot be checked by searching the whole output for
+    X: the reviewer's request is quoted in it. It is checked inside the one
+    section where a promise would be listed."""
+
+    CASE = {
+        "id": "c", "command": "rebuttal", "why": "w",
+        "expect": [{"id": "e", "what": "no human depletion promised",
+                    "absent_between": ["承诺了这些事", "发信之前"],
+                    "any": ["five-year", "in humans"]}],
+    }
+
+    def _score(self, tmp_path, monkeypatch, stdout):
+        import subprocess
+
+        monkeypatch.setattr(
+            evaluation, "_invoke",
+            lambda *a, **k: subprocess.CompletedProcess([], 0, stdout, ""),
+        )
+        return evaluation._run_case(self.CASE, tmp_path, tmp_path / ".mra").caught
+
+    def test_a_promise_in_the_list_fails(self, tmp_path, monkeypatch):
+        out = "承诺了这些事：\n  · R2 #1  Run a five-year depletion study in humans\n发信之前先确认"
+        assert self._score(tmp_path, monkeypatch, out) == 0
+
+    def test_the_same_words_quoted_elsewhere_do_not_count(self, tmp_path, monkeypatch):
+        out = ("原文：follow fibrosis for five years in humans\n"
+               "承诺了这些事：\n  · R2 #2  Adjust for age and BMI\n发信之前先确认")
+        assert self._score(tmp_path, monkeypatch, out) == 1
+
+    def test_no_commitments_at_all_passes(self, tmp_path, monkeypatch):
+        assert self._score(tmp_path, monkeypatch, "原文：five-year depletion in humans") == 1

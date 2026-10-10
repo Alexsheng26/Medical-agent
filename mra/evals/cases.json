@@ -380,17 +380,24 @@
           ]
         },
         {
-          "id": "refuses-the-impossible-ask",
-          "what": "不承诺在人身上做五年清除实验",
+          "id": "does-not-promise-the-impossible",
+          "what": "不承诺在人身上做五年清除实验（「这封信一旦发出，你就承诺了这些事」里没有它）",
+          "absent_between": [
+            "这封信一旦发出，你就承诺了这些事",
+            "发信之前先确认"
+          ],
           "any": [
-            "超出本文范围",
-            "out-of-scope",
-            "不可行",
-            "infeasible",
-            "not feasible",
-            "做不到",
-            "cannot be performed"
-          ]
+            "五年",
+            "5 年",
+            "five year",
+            "five-year",
+            "5-year",
+            "5 year",
+            "in humans",
+            "人体内清除",
+            "human cohort"
+          ],
+          "_note": "原来那条找的是拒绝的措辞（超出本文范围、infeasible…），可提示词自己就让模型把做不到的实验归为「认，但写成局限」，那个标签不在标记里。它测的不是它说的那件事。现在直接查承诺清单里有没有这个实验。"
         },
         {
           "id": "names-what-it-committed-to",

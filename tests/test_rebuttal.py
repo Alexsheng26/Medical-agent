@@ -333,8 +333,22 @@ class TestEvalCase:
         reviews, _ = self._fixtures()
         quoted = reviews.lower()
         for expectation in self._case()["expect"]:
+            if "absent_between" in expectation:
+                continue  # searched only inside the commitments list; see below
             echoed = [m for m in expectation["any"] if m.lower() in quoted]
             assert not echoed, f"{expectation['id']}: {echoed} is the reviewer's own wording"
+
+    def test_the_commitments_check_names_headings_the_report_really_prints(self):
+        """An absence check over a section that is never found passes on
+        anything — so the anchors must be the report's own headings."""
+        expectation = next(e for e in self._case()["expect"] if "absent_between" in e)
+        report = rebuttal.format_rebuttal(make([point(new_work="Adjust for age and BMI.")]))
+        start, end = expectation["absent_between"]
+        assert start in report and end in report
+        # The work is also printed beside its own comment; the copy that counts
+        # is the one inside the list.
+        listed = report.index("Adjust for age and BMI.", report.index(start))
+        assert listed < report.index(end, report.index(start))
 
     def test_the_sanity_marker_is_not_itself_quotable(self):
         reviews, manuscript = self._fixtures()

@@ -240,10 +240,28 @@ def _run_case(case: dict[str, Any], home: Path, workspace: Path) -> Result:
         )
 
     for expectation in case["expect"]:
-        found = any(marker.lower() in haystack for marker in expectation["any"])
+        if "absent_between" in expectation:
+            # A check that something was NOT done: none of the markers may
+            # appear in one section of the output. Searching the whole output
+            # for absence is useless — the reviewer's own words are quoted in
+            # it — so the section is named by the headings around it.
+            start, end = (anchor.lower() for anchor in expectation["absent_between"])
+            section = _between(haystack, start, end)
+            found = not any(marker.lower() in section for marker in expectation["any"])
+        else:
+            found = any(marker.lower() in haystack for marker in expectation["any"])
         result.checks.append(Check(expectation["id"], expectation["what"], found))
 
     return result
+
+
+def _between(text: str, start: str, end: str) -> str:
+    """The text from `start` to `end`; empty when `start` is not there."""
+    begin = text.find(start)
+    if begin < 0:
+        return ""
+    finish = text.find(end, begin)
+    return text[begin: finish if finish >= 0 else len(text)]
 
 
 def _invoke(argv: list[str], cwd: Path, workspace: Path) -> subprocess.CompletedProcess:
@@ -332,22 +350,34 @@ def format_report(
         # --free-only run against a full baseline otherwise reports the thirteen
         # cases that were never run as thirteen regressions — a catastrophic
         # number produced entirely by the comparison.
+        #
+        # The same holds the other way. A case added after the baseline was
+        # recorded is not an improvement: comparing an 18-check baseline with
+        # a 27-check run reported "18 → 26, 8 better" when every one of the 8
+        # was a check the baseline had never run.
         ran = {
-            (result.id, check.id)
+            (result.id, check.id): check.caught
             for result in report.results
             for check in result.checks
         }
         overlap = {key: value for key, value in previous.items() if key in ran}
+        fresh = {key: caught for key, caught in ran.items() if key not in previous}
         if not overlap:
             lines.append("对比基线  没有重叠的用例，无法比较")
             return _finish(lines, report)
 
         before = sum(1 for value in overlap.values() if value)
+        after = sum(1 for key in overlap if ran[key])
         skipped = len(previous) - len(overlap)
-        delta = report.caught - before
+        delta = after - before
         arrow = "持平" if delta == 0 else (f"好了 {delta} 条" if delta > 0 else f"差了 {-delta} 条")
         note = f"，基线里另有 {skipped} 条这次没跑" if skipped else ""
-        lines.append(f"对比基线  {before} → {report.caught}（{arrow}）{note}")
+        lines.append(f"对比基线  同样的 {len(overlap)} 条：{before} → {after}（{arrow}）{note}")
+        if fresh:
+            lines.append(
+                f"新用例    基线里没有的 {len(fresh)} 条：这次抓到 {sum(fresh.values())} 条"
+                "（没有基线可比，不算进上面的对比）"
+            )
 
     if show_misses:
         for result in report.results:

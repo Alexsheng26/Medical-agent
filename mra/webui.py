@@ -93,6 +93,7 @@ COMMANDS: dict[str, Spec] = {
         "yes": Option("--yes", "bool"),
         "output": _OUTPUT,
         "baseline": Option("--baseline"),
+        "show": Option("--show", "bool"),
     }),
     "project_list": Spec(prefix=("project", "list")),
     "project_new": Spec(prefix=("project", "new"), positional="name"),
