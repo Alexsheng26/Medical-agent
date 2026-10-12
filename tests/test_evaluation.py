@@ -9,6 +9,7 @@ markers describing each planted defect actually correspond to a defect.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -433,3 +434,99 @@ class TestAbsenceChecks:
 
     def test_no_commitments_at_all_passes(self, tmp_path, monkeypatch):
         assert self._score(tmp_path, monkeypatch, "原文：five-year depletion in humans") == 1
+
+
+class TestScopedChecks:
+    def _score(self, tmp_path, monkeypatch, case, stdout):
+        import subprocess
+
+        monkeypatch.setattr(
+            evaluation, "_invoke",
+            lambda *a, **k: subprocess.CompletedProcess([], 0, stdout, ""),
+        )
+        return {c.id: c.caught for c in evaluation._run_case(case, tmp_path, tmp_path / ".mra").checks}
+
+    def test_a_marker_outside_the_section_does_not_count(self, tmp_path, monkeypatch):
+        case = {"id": "c", "command": "import", "why": "w", "expect": [
+            {"id": "e", "what": "w", "within": ["局限", "临床"], "any": ["docking"]}]}
+        echoed = "方法\n  molecular docking\n局限\n  none\n临床\n"
+        raised = "方法\n  x\n局限\n  docking proves nothing about activation\n临床\n"
+        assert self._score(tmp_path, monkeypatch, case, echoed) == {"e": False}
+        assert self._score(tmp_path, monkeypatch, case, raised) == {"e": True}
+
+
+class TestCrossSectionalCase:
+    """The oldest case predates the echo discipline the newer ones follow, and
+    five of its six checks could be scored by restating the paper: its own
+    methods say "molecular docking" and "a single stored sample", and 反向关联
+    is ordinary Chinese for the inverse association it reports in women."""
+
+    PAPER = Path(evaluation.__file__).parent / "evals" / "cross_sectional.txt"
+
+    def _case(self):
+        return next(c for c in evaluation.load_cases() if c["id"] == "digest-cross-sectional")
+
+    def test_unscoped_markers_never_appear_in_the_paper(self):
+        text = self.PAPER.read_text(encoding="utf-8").lower()
+        for expectation in self._case()["expect"]:
+            if "within" in expectation:
+                continue
+            echoed = [m for m in expectation["any"] if m.lower() in text]
+            assert not echoed, f"{expectation['id']}: {echoed} is in the paper itself"
+
+    @pytest.mark.parametrize("phrase", ["反向关联", "呈负相关", "呈正相关", "方向相反", "分子对接", "单次储存样本"])
+    def test_unscoped_markers_are_not_ordinary_descriptive_chinese(self, phrase):
+        for expectation in self._case()["expect"]:
+            if "within" in expectation:
+                continue
+            for marker in expectation["any"]:
+                assert marker not in phrase, f"{expectation['id']}: {marker!r} matches {phrase!r}"
+
+    def _card(self, tmp_path, limitations):
+        from mra.library import format_card
+        from mra.pubmed import Article
+        from mra.store import Store
+
+        with Store(tmp_path / "k.db") as store:
+            store.add_articles([Article(pmid="local:aaaa1111", title="Microplastics", abstract="x")])
+            store.save_card("local:aaaa1111", {
+                "scientific_question": "微塑料与胰岛素抵抗",
+                "key_findings": ["男性正相关，女性呈反向关联"],
+                "methods": ["热裂解 GC-MS，单次储存样本 (single stored sample)",
+                            "分子对接 (molecular docking) 与毒理基因组挖掘"],
+                "novelty_claim": "提出 PPARG 机制",
+                "limitations": limitations,
+                "mechanism_keywords": ["PPARG"],
+                "clinical_relevance": "有限",
+                "evidence_strength": 2,
+            })
+            return format_card(store, "local:aaaa1111")
+
+    def _scores(self, tmp_path, monkeypatch, card):
+        return TestScopedChecks()._score(tmp_path, monkeypatch, self._case(), card)
+
+    def test_restating_the_paper_earns_nothing(self, tmp_path, monkeypatch):
+        scores = self._scores(tmp_path, monkeypatch, self._card(tmp_path, ["样本来自全国调查"]))
+        for check in ("reverse-causation-v2", "in-silico-only-v2", "single-timepoint-v2"):
+            assert scores[check] is False, f"{check} scored on a restatement"
+
+    def test_the_same_points_raised_as_limitations_count(self, tmp_path, monkeypatch):
+        card = self._card(tmp_path, [
+            "横断面设计，不能支持 leads to 的因果表述",
+            "可能存在反向因果：胰岛素抵抗可能反过来影响血清微塑料的测量值",
+            "机制仅基于分子对接，未经实验验证",
+            "单次采样，无法反映长期暴露",
+            "女性结果与男性方向相反却未作解释，也未检验交互作用",
+        ])
+        scores = self._scores(tmp_path, monkeypatch, card)
+        for check in ("causal-overreach-v2", "reverse-causation-v2", "in-silico-only-v2",
+                      "unexplained-sex-split-v2", "single-timepoint-v2"):
+            assert scores[check] is True, check
+
+    def test_changed_checks_carry_new_ids(self):
+        """A check whose rules changed is a different check. Keeping its id
+        would compare it with baselines scored the old way and report a
+        regression the model never had."""
+        ids = {e["id"] for e in self._case()["expect"]}
+        assert not ids & {"causal-overreach", "reverse-causation", "in-silico-only",
+                          "unexplained-sex-split", "single-timepoint"}

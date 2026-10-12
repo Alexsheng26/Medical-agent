@@ -93,8 +93,12 @@
       "why": "一篇横断面研究写了因果结论、没报效应量、机制全靠计算。这四条是审稿人一定会问的。",
       "expect": [
         {
-          "id": "causal-overreach",
-          "what": "指出横断面设计撑不起 leads to / drives 的因果表述",
+          "id": "causal-overreach-v2",
+          "what": "在「局限」里指出横断面设计撑不起 leads to / drives 的因果表述",
+          "within": [
+            "局限（含作者未承认的）",
+            "临床相关性"
+          ],
           "any": [
             "cross-section",
             "causal",
@@ -106,15 +110,23 @@
           ]
         },
         {
-          "id": "reverse-causation",
-          "what": "提出反向因果或共同处置的可能",
+          "id": "reverse-causation-v2",
+          "what": "提出反向因果或共同处置的可能（胰岛素抵抗反过来影响测到的微塑料）",
           "any": [
             "reverse caus",
             "reverse-caus",
+            "reversed caus",
             "bidirection",
+            "toxicokinetic",
             "反向因果",
-            "反向",
-            "confound by indication"
+            "因果倒置",
+            "逆向因果",
+            "逆因果",
+            "双向因果",
+            "反过来影响",
+            "反过来导致",
+            "毒代动力学",
+            "体内处置"
           ]
         },
         {
@@ -131,21 +143,33 @@
           ]
         },
         {
-          "id": "in-silico-only",
-          "what": "指出机制部分全是计算的，对接不能证明通路激活",
+          "id": "in-silico-only-v2",
+          "what": "在「局限」里指出机制部分全是计算的，对接不能证明通路激活",
+          "within": [
+            "局限（含作者未承认的）",
+            "临床相关性"
+          ],
           "any": [
             "in silico",
             "docking",
             "computational",
             "no experimental",
+            "not experimentally",
+            "not validated",
             "对接",
             "计算",
-            "未经实验"
+            "未经实验",
+            "实验验证",
+            "仅为预测"
           ]
         },
         {
-          "id": "unexplained-sex-split",
-          "what": "对性别相反的结果提出实质批评（无解释 / 算术上讲不通 / 缺交互检验）",
+          "id": "unexplained-sex-split-v2",
+          "what": "在「局限」里对性别相反的结果提出实质批评（无解释 / 算术上讲不通 / 缺交互检验）",
+          "within": [
+            "局限（含作者未承认的）",
+            "临床相关性"
+          ],
           "any": [
             "residual confound",
             "unexplained",
@@ -164,17 +188,21 @@
             "讲不通",
             "交互作用",
             "偶然"
-          ],
-          "_found_better": "第一次跑时这条判为漏掉，其实是标记太窄。模型给的是更强的一条：HOMA-IR 由空腹胰岛素算出来，所以空腹胰岛素有性别差异而 HOMA-IR 没有，这在算术上就讲不通。它还指出分层结果被当成效应修饰、却没报交互作用检验。两条都比「无生物学解释」硬。标记必须能认出更好的答案，否则评估集会把模型的进步记成退步。"
+          ]
         },
         {
-          "id": "single-timepoint",
-          "what": "指出单次采样 / 单时点测量的局限",
+          "id": "single-timepoint-v2",
+          "what": "在「局限」里指出单次采样 / 单时点测量的局限",
+          "within": [
+            "局限（含作者未承认的）",
+            "临床相关性"
+          ],
           "any": [
             "single sample",
             "single time",
             "one sample",
             "stored sample",
+            "single measurement",
             "单次",
             "单时点",
             "单一时间"
@@ -186,7 +214,7 @@
         "--digest",
         "--no-metadata"
       ],
-      "_note": "`digest` 只打印「Extracted N cards」，不打印卡片内容——所以用它做用例，六条标记永远匹配不上。改用 import --digest，它读完直接把卡片打出来。",
+      "_note": "2026-10 收紧：原先 6 条里有 5 条可以靠复述文章拿分——文章自己的方法里就写着 docking、single stored sample，卡片的「方法」一复述就算「批评了方法」；中文「反向关联」就是负相关，描述女性那组结果就能凑出「反向」。现在设计类批评只在「局限」那一段里找，「反向」换成了具体说法。规则变了的检查换了编号（-v2），旧基线不会因此报出假的「变差了」。",
       "sanity": {
         "what": "输出里确实有一张提炼卡片",
         "any": [
@@ -252,7 +280,8 @@
           "caption",
           "图注"
         ]
-      }
+      },
+      "_note": "已知弱点（2026-10）：这条用例早于「标记不能被复述拿分」的规矩。研究者自己的说明 demo_notes.md 里就写着 单中心、敲除、干预、体外、THP-1、独立实验，输出复述说明就能命中这些标记，所以这里的 ✓ 比 ✗ 弱。修法同 digest-cross-sectional：把批评类检查限定在输出里放批评的那一段。"
     },
     {
       "id": "assess-honest-ceiling",
@@ -327,7 +356,8 @@
           "评分",
           "/5"
         ]
-      }
+      },
+      "_note": "已知弱点（2026-10）：这条用例早于「标记不能被复述拿分」的规矩。研究者自己的说明 demo_notes.md 里就写着 单中心、敲除、干预、体外、THP-1、独立实验，输出复述说明就能命中这些标记，所以这里的 ✓ 比 ✗ 弱。修法同 digest-cross-sectional：把批评类检查限定在输出里放批评的那一段。"
     },
     {
       "id": "rebuttal-mixed-reviews",

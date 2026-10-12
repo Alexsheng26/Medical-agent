@@ -248,6 +248,14 @@ def _run_case(case: dict[str, Any], home: Path, workspace: Path) -> Result:
             start, end = (anchor.lower() for anchor in expectation["absent_between"])
             section = _between(haystack, start, end)
             found = not any(marker.lower() in section for marker in expectation["any"])
+        elif "within" in expectation:
+            # A critique that only counts where critiques go. A reading card
+            # restates the paper's methods in its 方法 section — "molecular
+            # docking", "a single stored sample" — and a marker that matches
+            # the restatement scores a criticism nobody made.
+            start, end = (anchor.lower() for anchor in expectation["within"])
+            section = _between(haystack, start, end)
+            found = any(marker.lower() in section for marker in expectation["any"])
         else:
             found = any(marker.lower() in haystack for marker in expectation["any"])
         result.checks.append(Check(expectation["id"], expectation["what"], found))
