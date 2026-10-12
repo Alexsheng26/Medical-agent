@@ -400,6 +400,8 @@ mra import (Get-ChildItem ~\papers\*.pdf).FullName --topic "你的主题"
 
 ## 下一步
 
+**先看 [使用建议](USAGE.md)。** 文件怎么准备、数据隐私、结果里哪些地方要自己核对。
+
 跑通之后回主 [README](../README.md) 看完整工作流，或者直接：
 
 ```bash
