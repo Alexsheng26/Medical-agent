@@ -41,6 +41,43 @@ QUERY_CHARS_PER_BLOCK = 1200
 _TABLE_BODY_RE = re.compile(r"\nFIRST \d+ ROWS:\n")
 
 
+# Formats a researcher's data most often arrives in that cannot be read as text.
+# They used to be read anyway, with errors replaced: an .xlsx reached the model
+# as the bytes of a ZIP archive and was assessed as if it were the data.
+_EXCEL = "Excel 文件读不了。在 Excel 里 文件 → 另存为 → 选「CSV UTF-8（逗号分隔）」，再选那个 .csv。"
+_WORD = "Word 文件读不了。另存为「纯文本 (.txt)」，编码选 UTF-8；或者把内容贴进一个 .md 文件。"
+_STATS = "统计软件的文件读不了。在软件里导出为 CSV（编码选 UTF-8）。"
+UNREADABLE = {
+    ".xlsx": _EXCEL, ".xls": _EXCEL, ".xlsm": _EXCEL, ".et": _EXCEL,
+    ".docx": _WORD, ".doc": _WORD, ".wps": _WORD, ".pptx": _WORD, ".ppt": _WORD,
+    ".sav": _STATS, ".dta": _STATS, ".sas7bdat": _STATS, ".rds": _STATS, ".rdata": _STATS,
+    ".pdf": "PDF 不能当数据文件读。论文请用「导入并阅读」；数据请从原始表格导出 CSV。",
+    ".zip": "压缩包读不了，先解压，再选里面的 CSV / TXT 文件。",
+}
+
+
+def _decode(path: Path) -> str:
+    """The file as text, in the encoding it is actually in.
+
+    UTF-8 first (with the BOM that Excel's 「CSV UTF-8」 writes removed), then
+    GB18030 — what 「CSV（逗号分隔）」 writes on Chinese Windows, which used to
+    arrive with every Chinese column name turned into �. That second step is
+    decoding, not guessing: GB18030 either decodes the bytes or it fails.
+    """
+    data = path.read_bytes()
+    if b"\x00" in data[:4096]:
+        raise ValueError(
+            f"{path.name} 不是文本文件（像是 Excel、Word 或其他软件的格式）。"
+            "请另存为 CSV 或 TXT，编码选 UTF-8。"
+        )
+    for encoding in ("utf-8-sig", "gb18030"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError(f"{path.name} 的编码认不出来。用记事本打开 → 另存为 → 编码选 UTF-8，再试一次。")
+
+
 def load_data_description(path: Path) -> str:
     """Read the researcher's data file into something describable.
 
@@ -51,7 +88,9 @@ def load_data_description(path: Path) -> str:
         raise FileNotFoundError(f"No such file: {path}")
 
     suffix = path.suffix.lower()
-    raw = path.read_text(encoding="utf-8", errors="replace")
+    if suffix in UNREADABLE:
+        raise ValueError(f"{path.name}：{UNREADABLE[suffix]}")
+    raw = _decode(path)
 
     if suffix in {".csv", ".tsv"}:
         delimiter = "\t" if suffix == ".tsv" else ","

@@ -512,3 +512,64 @@ class TestUnwritableWorkspace:
         message = cli._cannot_make_workspace(Path("D:/mra/.mra"), PermissionError(13, "denied"))
         assert "管理员" in message
         assert "USERPROFILE" in message, "no escape hatch that needs no permission surgery"
+
+
+class TestDataFilesAsTheyActuallyArrive:
+    """Student data comes as Excel workbooks and as CSVs saved by Chinese
+    Windows. Both used to be read with errors replaced: the model was handed a
+    ZIP archive's bytes, or a table whose every Chinese label was �, and
+    assessed it as data without a word of complaint."""
+
+    def _describe(self, path):
+        from mra import assess
+
+        return assess.load_data_description(path)
+
+    def test_an_excel_workbook_is_refused_with_the_save_as_steps(self, tmp_path):
+        import zipfile
+
+        book = tmp_path / "学生数据.xlsx"
+        with zipfile.ZipFile(book, "w") as archive:
+            archive.writestr("xl/worksheets/sheet1.xml", "<sheetData/>")
+        with pytest.raises(ValueError, match="CSV UTF-8"):
+            self._describe(book)
+
+    def test_a_word_document_is_refused(self, tmp_path):
+        doc = tmp_path / "实验记录.docx"
+        doc.write_bytes(b"PK\x03\x04 not text")
+        with pytest.raises(ValueError, match="纯文本"):
+            self._describe(doc)
+
+    def test_a_binary_file_with_a_text_name_is_refused(self, tmp_path):
+        disguised = tmp_path / "data.csv"
+        disguised.write_bytes(b"PK\x03\x04\x00\x00binary")
+        with pytest.raises(ValueError, match="不是文本文件"):
+            self._describe(disguised)
+
+    def test_a_gbk_csv_keeps_its_chinese(self, tmp_path):
+        table = tmp_path / "gbk.csv"
+        table.write_bytes("组别,肝纤维化分期,ALT\n对照组,F1,38\n模型组,F3,57\n".encode("gbk"))
+        described = self._describe(table)
+        assert "组别,肝纤维化分期,ALT" in described and "模型组" in described
+        assert "�" not in described
+
+    def test_excels_utf8_bom_does_not_stick_to_the_first_column(self, tmp_path):
+        table = tmp_path / "utf8.csv"
+        table.write_bytes("组别,ALT\n对照组,38\n".encode("utf-8-sig"))
+        assert "COLUMNS (2): 组别,ALT" in self._describe(table)
+
+    def test_the_assess_command_says_what_to_do(self, workspace, tmp_path, capsys, monkeypatch):
+        import zipfile
+
+        book = tmp_path / "数据.xlsx"
+        with zipfile.ZipFile(book, "w") as archive:
+            archive.writestr("a.xml", "<x/>")
+        class NoCalls:
+            def parse(self, *a, **k):
+                pytest.fail("a model call was made for an unreadable file")
+
+            text = parse
+
+        monkeypatch.setattr(cli, "_llm", lambda cfg: NoCalls())
+        assert run(["assess", str(book)], workspace) == 1
+        assert "另存为" in capsys.readouterr().err
