@@ -21,6 +21,12 @@ log = logging.getLogger(__name__)
 _NON_LATIN_RE = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯]")
 
 
+#: How the context begins when nothing in the library bore on the query — for
+#: callers that must tell the researcher a judgement had no literature behind it.
+EMPTY_LIBRARY = "(The knowledge base is empty — nothing has been imported yet.)"
+NOTHING_MATCHED = "Keyword retrieval matched nothing for this query"
+
+
 def needs_translation(query: str) -> bool:
     return bool(_NON_LATIN_RE.search(query))
 
@@ -115,9 +121,9 @@ def build_context(
     else:
         articles = store.recent_articles(limit=k)
         if not articles:
-            return ("(The knowledge base is empty — nothing has been imported yet.)", [])
+            return (EMPTY_LIBRARY, [])
         header = (
-            f"Keyword retrieval matched nothing for this query, so here are the "
+            f"{NOTHING_MATCHED}, so here are the "
             f"{len(articles)} most recently added papers instead. Their relevance to "
             "the question has NOT been established — check it before leaning on any "
             "of them, and say so if none of them bear on what was asked. These are "

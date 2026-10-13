@@ -1,4 +1,4 @@
-"""Ingest the researcher's own papers — PDFs and plain text.
+"""Ingest the researcher's own papers — PDFs, Word files and plain text.
 
 A PI's personal library is usually better curated than any PubMed query, and
 until now it was the one input that could not reach the knowledge base.
@@ -18,6 +18,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import documents
 from .pubmed import Article
 
 log = logging.getLogger(__name__)
@@ -31,10 +32,13 @@ log = logging.getLogger(__name__)
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 PDF_SUFFIXES = {".pdf"}
-TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".text"}
+TEXT_SUFFIXES = documents.TEXT_SUFFIXES
+WORD_SUFFIXES = documents.WORD_SUFFIXES
 XML_SUFFIXES = {".xml", ".nbib"}
 
-SUPPORTED_SUFFIXES = PDF_SUFFIXES | TEXT_SUFFIXES | XML_SUFFIXES
+#: Files whose metadata has to be read off the text — one model call each.
+LOCAL_SUFFIXES = PDF_SUFFIXES | TEXT_SUFFIXES | WORD_SUFFIXES
+SUPPORTED_SUFFIXES = LOCAL_SUFFIXES | XML_SUFFIXES
 
 # Below this a PDF almost certainly has no text layer — a scan or an image-only
 # export. Silently storing 40 characters of header would poison retrieval, so
@@ -65,7 +69,7 @@ class ExtractedDoc:
 
     path: Path
     text: str
-    kind: str  # "pdf" | "text"
+    kind: str  # "pdf" | "text" | "docx"
     pages: int = 0
     warnings: list[str] = field(default_factory=list)
     front: str = ""  # the window that carries title, authors, journal, DOI
@@ -91,11 +95,23 @@ def extract(path: Path) -> ExtractedDoc:
         return _extract_pdf(path)
     if suffix in TEXT_SUFFIXES:
         text = _clean(path.read_text(encoding="utf-8", errors="replace"))
-        doc = ExtractedDoc(path=path, text=text, kind="text", front=text[:METADATA_WINDOW])
-        if not doc.usable:
-            doc.warnings.append(f"only {len(doc.text)} characters — too short to be a paper")
+        return _text_doc(path, text, "text")
+    if suffix in WORD_SUFFIXES:
+        try:
+            read = documents.read_docx(path)
+        except documents.DocumentError as exc:
+            return ExtractedDoc(path=path, text="", kind="docx", warnings=[str(exc)])
+        doc = _text_doc(path, _clean(read.text), "docx")
+        doc.warnings[:0] = read.notes
         return doc
     raise IngestError(f"Unsupported file type: {path.name}")
+
+
+def _text_doc(path: Path, text: str, kind: str) -> ExtractedDoc:
+    doc = ExtractedDoc(path=path, text=text, kind=kind, front=text[:METADATA_WINDOW])
+    if not doc.usable:
+        doc.warnings.append(f"only {len(doc.text)} characters — too short to be a paper")
+    return doc
 
 
 def _extract_pdf(path: Path) -> ExtractedDoc:

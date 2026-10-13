@@ -222,7 +222,7 @@ async function api(path, options = {}) {
 
 const TASKS = [
   { group: "文献库", items: [
-    { id: "import", name: "导入并阅读", lede: "把文章交给它读。PDF、PubMed 导出的 XML、或纯文本，读完直接出分析。",
+    { id: "import", name: "导入并阅读", lede: "把文章交给它读。PDF、Word、PubMed 导出的 XML、或纯文本，读完直接出分析。",
       cmd: "import", linkify: true, fields: [
         { key: "files", type: "files", label: "文件", required: true,
           hint: "可以一次选多个。PubMed 网页版导出：Send to → File → Format: XML。" },
@@ -279,9 +279,21 @@ const TASKS = [
   ]},
   { group: "想清楚", items: [
     { id: "chat", name: "科学对话", lede: "每一轮都先检索你自己的文献库，再回答。中文提问也能命中英文语料。", chat: true },
+    { id: "critique", name: "审课题",
+      lede: "学生的开题报告、课题设计或组会 PPT 放进来：逻辑链哪里断了，新颖性对着你的文献库说，实验设计的漏洞，最该先做哪个实验，以及组会上可以问他的问题。",
+      cmd: "critique", fields: [
+        { key: "files", type: "files", label: "课题材料（Word、PPT、PDF、txt 都行，可以选几个）", required: true },
+        { key: "notes", type: "area", label: "背景（可选）",
+          placeholder: "比如：硕士二年级，还剩一年半；实验室有流式和小鼠平台，没做过单细胞",
+          hint: "材料里没写、但判断可行性要用的：年级、剩多少时间、实验室有什么。" },
+        { key: "focus", type: "area", label: "你的要求（可选）",
+          placeholder: "比如：重点看实验设计；他打算报国自然青年基金" },
+        { key: "output", type: "text", label: "另存为（可选）", placeholder: "审阅意见.md",
+          hint: "存成 .md，可以直接发给学生。新颖性要靠文献库：库里没有这个方向的文献时，会提醒你先检索。" },
+      ] },
     { id: "assess", name: "评估数据", lede: "五维打分。不指定期刊时，会排序推荐候选刊。",
       cmd: "assess", fields: [
-        { key: "data", type: "files", label: "数据文件", hint: "csv / tsv / txt / md。实验记录也一起选上，模型需要背景。", required: true },
+        { key: "data", type: "files", label: "数据文件", hint: "表格存成 csv（Excel 另存为「CSV UTF-8」）。实验记录也一起选上，Word 直接选，模型需要背景。", required: true },
         { key: "notes", type: "area", label: "补充说明", hint: "文件里没写的信息，例如「n=12/组，两批独立队列」。" },
         { key: "journal", type: "text", label: "目标期刊", hint: "留空 = 让它推荐。填了 = 对着这本刊的门槛评。" },
       ] },
@@ -328,7 +340,7 @@ const TASKS = [
     { id: "rebuttal", name: "回复审稿人",
       lede: "逐条分类再回复：哪条认、哪条顶回去、哪条是你没写显眼。会把「这封信一旦发出你就承诺了什么」单独列出来。",
       cmd: "rebuttal", fields: [
-        { key: "reviews", type: "file", label: "审稿意见（把编辑的信存成 txt 或 md）", required: true },
+        { key: "reviews", type: "file", label: "审稿意见（Word、PDF、txt 都行）", required: true },
         { key: "manuscript", type: "file", label: "投出去的那版稿子", required: true },
         { key: "data", type: "file", label: "原始数据（可选，让它知道哪些能重算）" },
         { key: "journal", type: "text", label: "期刊（可选，用于语气）" },

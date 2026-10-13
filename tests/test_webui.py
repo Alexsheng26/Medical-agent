@@ -266,6 +266,13 @@ class TestInBrowser:
         assert page.inner_text("#panel h2") == "评估数据"
         assert page.failures == []
 
+    def test_the_project_review_panel_takes_word_and_slides(self, page):
+        page.get_by_role("button", name="审课题").click()
+        page.wait_for_timeout(250)
+        assert page.inner_text("#panel h2") == "审课题"
+        assert "Word、PPT" in page.inner_text("#panel")
+        assert page.failures == []
+
     def test_a_command_runs_from_the_page_and_reports_completion(self, page):
         page.get_by_role("button", name="流程速查").click()
         page.wait_for_timeout(250)

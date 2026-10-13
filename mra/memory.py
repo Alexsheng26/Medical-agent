@@ -15,6 +15,7 @@ session.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import statistics
 from collections import Counter
@@ -22,12 +23,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import prompts
+from . import documents, prompts
 from .config import Config
 from .deai import split_sentences
 from .llm import LLM
 from .schemas import WritingFingerprint
 from .store import Store
+
+log = logging.getLogger(__name__)
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z'\-]*")
 
@@ -187,15 +190,26 @@ def build_fingerprint(
 
     texts = []
     for path in sorted(sample_dir.iterdir()):
-        if path.suffix.lower() in {".txt", ".md", ".markdown", ".text"}:
+        suffix = path.suffix.lower()
+        if suffix in documents.TEXT_SUFFIXES:
             content = path.read_text(encoding="utf-8", errors="replace").strip()
-            if len(content) > 400:
-                texts.append(f"({path.name})\n{content}")
+        elif suffix in documents.WORD_SUFFIXES:
+            # The researcher's own manuscripts are Word files; this is where
+            # their voice is, not in the typeset PDF.
+            try:
+                content = documents.read_docx(path).text.strip()
+            except documents.DocumentError as exc:
+                log.warning("%s", exc)
+                continue
+        else:
+            continue
+        if len(content) > 400:
+            texts.append(f"({path.name})\n{content}")
 
     if not texts:
         raise ValueError(
-            f"No usable text files in {sample_dir}. Save two or three of your own "
-            "published papers as .txt and try again."
+            f"No usable text files in {sample_dir}. Put two or three of your own "
+            "papers there as Word (.docx) or .txt files and try again."
         )
 
     combined = "\n\n===\n\n".join(texts)

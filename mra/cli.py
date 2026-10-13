@@ -16,12 +16,14 @@ from pathlib import Path
 from . import assess as assess_mod
 from . import backends
 from . import doctor as doctor_mod
+from . import documents
 from . import citations, deai, dialogue, journal as journal_mod, memory as memory_mod
 from . import brief as brief_mod
 from . import figures as figures_mod
 from . import ingest, library as library_mod, pipeline, projects as projects_mod
 from . import rebuttal as rebuttal_mod
 from . import compare as compare_mod, mindmap as mindmap_mod, selection
+from . import critique as critique_mod
 from . import review as review_mod, writing
 from .config import Config
 from .llm import LLM, RefusalError
@@ -40,6 +42,7 @@ GUIDE = """
                        mra hypothesis --note "第一版"  # 冻结为可版本比较的假说
                        mra proposal -o proposal.md     # 生成 proposal 框架
                        mra review "主题" --outline-only # 综述：先看大纲，再决定写不写
+                       mra critique 开题报告.docx --notes "硕士二年级" # 审学生的课题
   第三步 定期刊        mra assess data.csv --notes "n=12/组" # 评分 + 排序推荐候选期刊
                        mra journal add "Hepatology" --samples ./samples/hepatology
   第四步 对标评估      mra assess data.csv --journal Hepatology  # 对着该刊门槛再评一次
@@ -79,20 +82,20 @@ def _force_utf8_output() -> None:
 
 
 def read_text(path: Path) -> str:
-    """Read a manuscript the researcher wrote, failing loudly on encoding.
+    """Read a manuscript, a review letter or a proposal, failing loudly.
 
-    Not `errors="replace"`: silently substituting characters in a manuscript
-    corrupts the text you are about to submit. A Word export saved as GBK on
-    Windows is common enough to deserve an instruction rather than a traceback.
+    Word, PowerPoint and PDF are read directly (see mra/documents.py). Plain
+    text must be UTF-8 — not `errors="replace"`: silently substituting
+    characters in a manuscript corrupts the text you are about to submit.
+    Anything that was not read — pictures, comments — is said on screen.
     """
     try:
-        return path.read_text(encoding="utf-8")
-    except UnicodeDecodeError as exc:
-        raise SystemExit(
-            f"{path} is not UTF-8 ({exc.reason} at byte {exc.start}).\n"
-            "Re-save it as UTF-8 — in Notepad, 文件 → 另存为 → 编码选 UTF-8; "
-            "in VS Code, click the encoding in the status bar → Save with Encoding."
-        ) from exc
+        document = documents.read(path)
+    except documents.DocumentError as exc:
+        raise SystemExit(str(exc)) from exc
+    for note in document.notes:
+        print(f"{NOTICE}{note}")
+    return document.text
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -453,9 +456,7 @@ def cmd_import(args, cfg: Config) -> int:
     the metadata off the front matter, unless --no-metadata is passed.
     """
     paths = [Path(p) for p in args.files]
-    needs_model = any(
-        p.suffix.lower() in (ingest.PDF_SUFFIXES | ingest.TEXT_SUFFIXES) for p in paths
-    )
+    needs_model = any(p.suffix.lower() in ingest.LOCAL_SUFFIXES for p in paths)
     wants_model = args.digest or (needs_model and not args.no_metadata)
     llm = _llm(cfg) if wants_model else None
 
@@ -877,6 +878,41 @@ def cmd_figures(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_critique(args, cfg: Config) -> int:
+    """Read a student's project before it starts — see mra/critique.py."""
+    # Read every file before anything is spent: a .doc in the list should stop
+    # the command here, not after the model has been paid to read the rest.
+    paths = [Path(p) for p in args.files]
+    material, cut = critique_mod.combine([(path.name, read_text(path)) for path in paths])
+    if cut:
+        print(f"{NOTICE}材料超过 {critique_mod.MAX_MATERIAL} 字，参考文献和中间一部分没有读进来"
+              "（表格尽量保留了）。只想审某一部分的话，单独把那部分存成一个文件。")
+
+    with _store(cfg) as store:
+        llm = _llm(cfg)
+        result, warning = critique_mod.review(
+            cfg, store, llm, material, notes=args.notes or "", focus=args.focus or ""
+        )
+        print(critique_mod.format_critique(result, store))
+
+        if warning:
+            print(f"\n{NOTICE}{warning}")
+        if invented := critique_mod.unquoted(result, material):
+            print(f"\n{NOTICE}下面这几处「原文」在材料里找不到——可能是改了措辞，"
+                  "也可能是批评了学生没写过的话。拿给学生之前逐条核对：")
+            for item in invented:
+                print(f"    {item}")
+        if fake := critique_mod.fabricated_citations(result, store):
+            print(f"\n{NOTICE}审阅里引用了文献库里没有的文献，不要当依据：{', '.join(fake)}")
+
+        if args.output:
+            text = (critique_mod.to_json(result) if Path(args.output).suffix.lower() == ".json"
+                    else critique_mod.to_markdown(result, store))
+            path = _write_out(text, args.output, cfg, "")
+            print(f"\n{NOTICE}已写入 {path}")
+    return 0
+
+
 def cmd_rebuttal(args, cfg: Config) -> int:
     """Respond to peer review — see mra/rebuttal.py for what it refuses to do."""
     with _store(cfg) as store:
@@ -1285,7 +1321,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--query", help="Use this PubMed query verbatim, skipping planning")
 
     p = add("import", cmd_import, "Load PubMed XML, PDFs, or plain text from disk")
-    p.add_argument("files", nargs="+", help="Files: .xml (PubMed), .pdf, .txt, .md")
+    p.add_argument("files", nargs="+", help="Files: .xml (PubMed), .pdf, .docx, .txt, .md")
     p.add_argument("--topic", default="", help="Label these records with a topic")
     p.add_argument("--no-metadata", action="store_true",
                    help="Skip metadata extraction for PDFs/text (no API call)")
@@ -1405,8 +1441,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--notes", default="")
     p.add_argument("-o", "--output")
 
+    p = add("critique", cmd_critique, "Review a student's project before it starts")
+    p.add_argument("files", nargs="+",
+                   help="The proposal, slides or plan: .docx, .pptx, .pdf, .txt, .md")
+    p.add_argument("--notes", default="",
+                   help="What the material does not say: year, time left, what the lab has")
+    p.add_argument("--focus", default="", help="What to concentrate on — 侧重什么")
+    p.add_argument("-o", "--output", help="Also write it: .md to send on, or .json")
+
     p = add("rebuttal", cmd_rebuttal, "Draft the point-by-point response to peer review")
-    p.add_argument("reviews", help="The reviewers' comments (txt/md)")
+    p.add_argument("reviews", help="The reviewers' comments (.docx, .pdf, .txt or .md)")
     p.add_argument("--manuscript", required=True, help="The submitted manuscript")
     p.add_argument("--data", nargs="+", help="Data files, so it knows what can be reanalysed")
     p.add_argument("--journal", help="The journal's stored profile, for register")

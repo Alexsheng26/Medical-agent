@@ -172,6 +172,11 @@ COMMANDS: dict[str, Spec] = {
         repeated=True,
         options={"focus": Option("--focus"), "output": _OUTPUT},
     ),
+    "critique": Spec(
+        positional="files",
+        repeated=True,
+        options={"notes": _NOTES, "focus": Option("--focus"), "output": _OUTPUT},
+    ),
     "rebuttal": Spec(
         positional="reviews",
         options={
@@ -206,7 +211,7 @@ COMMANDS: dict[str, Spec] = {
 COSTLY = {
     "digest", "chat", "assess", "figures", "review", "draft", "proposal",
     "finalize", "hypothesis", "journal_add", "fingerprint", "search", "import",
-    "rebuttal", "mindmap", "compare",
+    "rebuttal", "mindmap", "compare", "critique",
     # eval runs the paid cases unless told otherwise — that is the whole point
     # of running it, so it carries the marker.
     "eval",

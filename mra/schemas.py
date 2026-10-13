@@ -519,3 +519,84 @@ class Comparison(BaseModel):
     for_you: str = Field(description="What this comparison means for the researcher's "
                          "own question or hypothesis, if one was supplied; otherwise "
                          "what it means for someone designing the next study")
+
+
+# How ready a student's project is to start. Three, not a score: what the
+# supervisor has to decide is whether the student starts on Monday.
+VERDICTS = ("go", "revise", "rethink")
+
+
+class ProposalIssue(BaseModel):
+    """One problem in a project's design, located in the material."""
+
+    where: str = Field(
+        description="The sentence or phrase the problem is in, copied from the material "
+        "word for word — this is checked mechanically. Keep it short. Empty only when "
+        "the problem is something missing from the material altogether."
+    )
+    problem: str = Field(description="What is wrong, specifically: name the missing "
+                         "control, the step that does not follow, the claim that outruns "
+                         "the design. Not a category.")
+    consequence: str = Field(description="What goes wrong if it is not fixed — which "
+                             "conclusion will not hold, or what the reviewer will say")
+    fix: str = Field(description="The concrete change: the control to add, the n, the "
+                     "experiment to insert, the sentence to reword")
+    severity: str = Field(
+        description="fatal if the project as designed cannot answer its own question, "
+        "major if one aim's conclusion will not hold, minor otherwise"
+    )
+
+
+class Novelty(BaseModel):
+    level: int = Field(description="1 to 5. 1 = already published as planned; "
+                       "3 = a solid specialist-journal question; 5 = would change how "
+                       "the field thinks. Judged against the supplied literature.")
+    kind: str = Field(description="Which kind of new it is: new mechanism, known "
+                      "mechanism in a new cell type or disease, new model, first human "
+                      "evidence, new method, incremental, or already done")
+    judgement: str = Field(description="Why, against the supplied literature. If the "
+                           "literature supplied does not bear on this question, say so: "
+                           "a novelty judgement with nothing behind it is an opinion.")
+    prior: list[str] = Field(description="[PMID:x] or [LOCAL:x] markers for papers that "
+                             "already did part of this or contradict its premise. Only "
+                             "identifiers present in the supplied literature.")
+
+
+class Critique(BaseModel):
+    """A supervisor's read of a student's project before it starts."""
+
+    understanding: str = Field(
+        description="The project's central question and why it matters, restated in two "
+        "or three sentences in your own words. The supervisor checks this first: if it "
+        "is not what the student meant, the material is unclear."
+    )
+    hypothesis: str = Field(description="The testable hypothesis, as the material states "
+                            "it or as it implies it. Say plainly if there is none.")
+    logic: list[ProposalIssue] = Field(
+        description="Breaks in the chain from clinical problem to gap, question, "
+        "hypothesis, aims, experiments and conclusion. Empty if the chain holds."
+    )
+    novelty: Novelty
+    rigor: list[ProposalIssue] = Field(
+        description="Design problems: controls, n and power, randomisation and blinding, "
+        "replication, model validity, statistics, human samples"
+    )
+    feasibility: list[ProposalIssue] = Field(
+        description="What will not fit the time, skills, animals, samples or money "
+        "available, judged from what the material and the notes say"
+    )
+    first_steps: list[str] = Field(
+        description="What to do first, in order: the cheapest experiment or check that "
+        "could confirm or kill the premise comes first. Each with a rough time."
+    )
+    questions: list[str] = Field(
+        description="Questions for the supervisor to put to the student at the next "
+        "meeting — the ones whose answers show whether the student understands their "
+        "own project. Not rhetorical."
+    )
+    strengths: list[str] = Field(description="Up to three things that genuinely hold up. "
+                                 "Empty rather than padded.")
+    verdict: str = Field(description="One of: go (start as planned, fix the minor "
+                         "points on the way), revise (fix the listed problems first), "
+                         "rethink (the question or premise needs to change)")
+    verdict_reason: str = Field(description="One or two sentences: the reason for the verdict")

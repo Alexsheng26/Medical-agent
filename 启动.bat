@@ -262,6 +262,7 @@ if "%CHOICE%"=="15" goto :do_mindmap
 if "%CHOICE%"=="16" goto :do_compare
 if "%CHOICE%"=="17" goto :do_rebuttal
 if "%CHOICE%"=="18" goto :do_export
+if "%CHOICE%"=="19" goto :do_critique
 if "%CHOICE%"=="0" goto :done
 echo   没有这个选项，请重新选。
 goto :menu
@@ -334,9 +335,25 @@ set /p "FOCUS=你的要求（例如 侧重研究设计，可直接回车跳过�
 "%RUN%" -m mra %PROJARG% compare %ITEMS% --focus "%FOCUS%" -o 异同比较.md
 goto :after
 
+:do_critique
+echo.
+echo   把学生的开题报告、课题设计或组会 PPT 拖进窗口（可以拖几个），回车。
+set "FILES="
+set /p "FILES=课题材料: "
+if not defined FILES goto :menu
+set "CNOTES="
+set /p "CNOTES=背景，比如年级、还剩多少时间、实验室有什么（直接回车跳过）: "
+if defined CNOTES goto :critique_notes
+"%RUN%" -m mra %PROJARG% critique %FILES% -o 审阅意见.md
+goto :after
+
+:critique_notes
+"%RUN%" -m mra %PROJARG% critique %FILES% --notes "%CNOTES%" -o 审阅意见.md
+goto :after
+
 :do_rebuttal
 echo.
-echo   先把审稿意见（存成 txt 或 md）拖进窗口回车，再拖投出去的那版稿子。
+echo   先把审稿意见（Word、PDF、txt 都行）拖进窗口回车，再拖投出去的那版稿子。
 set "REVIEWS="
 set /p "REVIEWS=审稿意见: "
 if not defined REVIEWS goto :menu

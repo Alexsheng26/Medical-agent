@@ -17,9 +17,11 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import re
 from pathlib import Path
 
+from . import documents
 from . import journal as journal_mod
 from . import prompts, retrieval
 from .config import Config
@@ -40,20 +42,24 @@ QUERY_CHARS_PER_BLOCK = 1200
 
 _TABLE_BODY_RE = re.compile(r"\nFIRST \d+ ROWS:\n")
 
+log = logging.getLogger(__name__)
+
 
 # Formats a researcher's data most often arrives in that cannot be read as text.
 # They used to be read anyway, with errors replaced: an .xlsx reached the model
 # as the bytes of a ZIP archive and was assessed as if it were the data.
-_EXCEL = "Excel 文件读不了。在 Excel 里 文件 → 另存为 → 选「CSV UTF-8（逗号分隔）」，再选那个 .csv。"
-_WORD = "Word 文件读不了。另存为「纯文本 (.txt)」，编码选 UTF-8；或者把内容贴进一个 .md 文件。"
-_STATS = "统计软件的文件读不了。在软件里导出为 CSV（编码选 UTF-8）。"
+#
+# Excel stays refused even though Word is now read: a workbook's dates are
+# stored as day counts, its sheets are several tables in one file, and merged
+# cells spread one label over many rows. Each of those reads without an error
+# and comes out wrong, and a wrong number is worse than a refusal.
 UNREADABLE = {
-    ".xlsx": _EXCEL, ".xls": _EXCEL, ".xlsm": _EXCEL, ".et": _EXCEL,
-    ".docx": _WORD, ".doc": _WORD, ".wps": _WORD, ".pptx": _WORD, ".ppt": _WORD,
-    ".sav": _STATS, ".dta": _STATS, ".sas7bdat": _STATS, ".rds": _STATS, ".rdata": _STATS,
+    **documents.REFUSED,
     ".pdf": "PDF 不能当数据文件读。论文请用「导入并阅读」；数据请从原始表格导出 CSV。",
-    ".zip": "压缩包读不了，先解压，再选里面的 CSV / TXT 文件。",
 }
+
+#: Read as documents: an experiment record or a lab notebook page in Word.
+DOCUMENT_SUFFIXES = documents.WORD_SUFFIXES | documents.SLIDE_SUFFIXES
 
 
 def _decode(path: Path) -> str:
@@ -90,6 +96,11 @@ def load_data_description(path: Path) -> str:
     suffix = path.suffix.lower()
     if suffix in UNREADABLE:
         raise ValueError(f"{path.name}：{UNREADABLE[suffix]}")
+    if suffix in DOCUMENT_SUFFIXES:
+        document = documents.read(path)
+        for note in document.notes:
+            log.warning("%s", note)
+        return f"FILE: {path.name}\n\n{document.text}"
     raw = _decode(path)
 
     if suffix in {".csv", ".tsv"}:

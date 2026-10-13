@@ -534,10 +534,12 @@ class TestDataFilesAsTheyActuallyArrive:
         with pytest.raises(ValueError, match="CSV UTF-8"):
             self._describe(book)
 
-    def test_a_word_document_is_refused(self, tmp_path):
+    def test_a_word_document_that_will_not_open_says_why(self, tmp_path):
+        """Word files are read now (tests/test_documents.py); one that is not
+        really a .docx still must not reach the model as bytes."""
         doc = tmp_path / "实验记录.docx"
         doc.write_bytes(b"PK\x03\x04 not text")
-        with pytest.raises(ValueError, match="纯文本"):
+        with pytest.raises(ValueError, match="打不开"):
             self._describe(doc)
 
     def test_a_binary_file_with_a_text_name_is_refused(self, tmp_path):
