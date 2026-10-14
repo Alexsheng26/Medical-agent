@@ -116,6 +116,26 @@ class TestCitations:
         assert critique.fabricated_citations(make(), store) == []
 
 
+class TestWhatTheModelMayLeaveOut:
+    """An OpenAI-compatible endpoint asked for an empty list sometimes omits the
+    key. Each of these used to fail validation twice and lose the review."""
+
+    def test_empty_fields_may_be_missing(self):
+        answer = {
+            "understanding": "u", "hypothesis": "h",
+            "novelty": {"level": 2, "kind": "k", "judgement": "j"},
+            "rigor": [{"problem": "没有盲法", "consequence": "偏倚", "fix": "设盲", "severity": "major"}],
+            "first_steps": ["先做共染"], "verdict": "revise", "verdict_reason": "r",
+        }
+        parsed = Critique.model_validate(answer)
+        assert parsed.logic == [] and parsed.strengths == [] and parsed.questions == []
+        assert parsed.novelty.prior == [] and parsed.rigor[0].where == ""
+
+    @pytest.mark.parametrize("written, read", [("2", 2), ("2/5", 2), ("3 分", 3), (2.6, 3), (9, 5), (0, 1)])
+    def test_a_novelty_score_written_as_text_is_still_read(self, written, read):
+        assert Novelty(level=written, kind="k", judgement="j").level == read
+
+
 # ------------------------------------------------------------------- the review
 
 

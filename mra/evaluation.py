@@ -178,10 +178,15 @@ def _seed(home: Path, workspace: Path) -> None:
         with resources.as_file(source) as path:
             shutil.copyfile(path, home / name)
 
-    for name in ("cross_sectional.txt", "reviews_mixed.txt", "manuscript_under_review.md"):
-        source = resources.files("mra") / "evals" / name
+    # Every fixture in evals/, not a list of names: a list is one more place a
+    # new case has to be registered, and the critique case shipped without its
+    # line here — so it ran against a file that was not there, and the run
+    # reported a broken case instead of a model's judgement.
+    for source in (resources.files("mra") / "evals").iterdir():
+        if not source.is_file() or source.name.endswith(".json"):
+            continue  # cases.json and the shipped baselines are not material
         with resources.as_file(source) as path:
-            shutil.copyfile(path, home / name)
+            shutil.copyfile(path, home / source.name)
 
     (home / "forged.md").write_text(
         "TREM2+ macrophages accumulate in fibrous septa [PMID:34556677].\n"
@@ -225,7 +230,7 @@ def _run_case(case: dict[str, Any], home: Path, workspace: Path) -> Result:
     # it catches a forged citation, which is the behaviour being tested. Each
     # case declares the code that means "worked", defaulting to 0.
     if completed.returncode != case.get("exit_code", 0):
-        result.error = _last_meaningful_line(completed.stdout)
+        result.error = _failure_reason(completed)
 
     haystack = completed.stdout.lower()
 
@@ -284,6 +289,32 @@ def _invoke(argv: list[str], cwd: Path, workspace: Path) -> subprocess.Completed
         stdin=subprocess.DEVNULL,
         timeout=900,
     )
+
+
+def _failure_reason(completed: subprocess.CompletedProcess) -> str:
+    """What the command said went wrong.
+
+    Errors are printed to stderr, so reading only stdout reported every failure
+    as "(no output)" — the first real run of the critique case showed exactly
+    that, with "找不到这个文件" sitting unread in the other stream.
+
+    Which line is the reason depends on the shape. A traceback ends with it. A
+    handled error starts with it, and may go on for several lines of advice
+    after — the last of which says nothing about this failure. The cost line
+    is printed after every run, failed or not, and log lines narrate retries;
+    neither is the reason.
+    """
+    lines = [line.strip() for line in (completed.stderr or "").splitlines() if line.strip()]
+    lines = [line for line in lines
+             if not line.startswith(("usage:", "INFO ", "DEBUG ", "WARNING "))]
+    if not lines:
+        return _last_meaningful_line(completed.stdout)
+    if any(line.startswith("Traceback (most recent call last)") for line in lines):
+        return lines[-1][:300]
+    reason = lines[0]
+    if reason.endswith((":", "：")) and len(lines) > 1:
+        reason = f"{reason} {lines[1]}"  # "Last error:" names nothing on its own
+    return reason[:300]
 
 
 def _last_meaningful_line(text: str) -> str:

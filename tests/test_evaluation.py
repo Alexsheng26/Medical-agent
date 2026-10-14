@@ -133,6 +133,74 @@ class TestBaseline:
         assert "变差了" not in text and "变好了" not in text
 
 
+class TestEveryCaseHasItsMaterial:
+    """The critique case shipped naming a fixture the run never copied in, and
+    the run reported it as broken rather than measuring anything."""
+
+    @pytest.fixture
+    def home(self, tmp_path, monkeypatch):
+        # Only the file layout is under test; skip building the library.
+        monkeypatch.setattr(evaluation, "_invoke", lambda *a, **k: None)
+        evaluation._seed(tmp_path, tmp_path / ".mra")
+        return tmp_path
+
+    def test_every_file_a_case_names_is_laid_out(self, home):
+        suffixes = (".md", ".txt", ".csv", ".xml", ".docx", ".pptx", ".pdf")
+        for case in evaluation.load_cases():
+            named = [case.get("file", "")] + case.get("data", [])
+            named += [arg.split("=", 1)[-1] for arg in case.get("args", [])]
+            for name in named:
+                if name.lower().endswith(suffixes):
+                    assert (home / name).is_file(), f'{case["id"]}: {name} is not seeded'
+
+    def test_the_case_definitions_are_not_copied_as_material(self, home):
+        assert not (home / "cases.json").exists()
+
+
+class TestFailureReasons:
+    """Errors go to stderr. Reading stdout alone reported "(no output)"."""
+
+    def _run(self, tmp_path, monkeypatch, stdout, stderr, code=1):
+        import subprocess
+
+        case = {"id": "c", "command": "critique", "why": "w",
+                "expect": [{"id": "e", "what": "w", "any": ["因果"]}]}
+        monkeypatch.setattr(
+            evaluation, "_invoke",
+            lambda *a, **k: subprocess.CompletedProcess([], code, stdout, stderr),
+        )
+        return evaluation._run_case(case, tmp_path, tmp_path / ".mra")
+
+    def test_the_error_printed_to_stderr_is_reported(self, tmp_path, monkeypatch):
+        result = self._run(tmp_path, monkeypatch, "", "\nError: 找不到这个文件：student_proposal.md\n")
+        assert result.error == "Error: 找不到这个文件：student_proposal.md"
+
+    def test_the_head_of_a_handled_error_is_the_reason_not_its_advice(self, tmp_path, monkeypatch):
+        """The backend's message ends in general advice; the cost line and a
+        retry notice come along too. None of those is why it failed."""
+        stderr = (
+            "INFO Structured reply did not validate; retrying once.\n"
+            "\ndeepseek-chat did not return a valid Critique after 2 attempts. Last error:\n"
+            "1 validation error for Critique\nstrengths\n  Field required\n\n"
+            "Structured commands (digest, assess, hypothesis, review) need an endpoint "
+            "with working tool calling.\n"
+            "\nusage: 2 calls · in 9.1k · out 3.2k · cost unknown\n"
+        )
+        result = self._run(tmp_path, monkeypatch, "", stderr)
+        assert result.error.startswith("deepseek-chat did not return a valid Critique")
+        assert "1 validation error for Critique" in result.error
+
+    def test_a_traceback_is_reported_by_its_last_line(self, tmp_path, monkeypatch):
+        stderr = ('Traceback (most recent call last):\n  File "x.py", line 1, in <module>\n'
+                  "KeyError: 'novelty'\n")
+        result = self._run(tmp_path, monkeypatch, "", stderr)
+        assert result.error == "KeyError: 'novelty'"
+
+    def test_stdout_is_still_used_when_stderr_is_empty(self, tmp_path, monkeypatch):
+        result = self._run(tmp_path, monkeypatch, "partial\nlast words\n", "")
+        assert result.error == "last words"
+
+
 class TestRunSelection:
     def test_free_only_drops_the_paid_cases(self, monkeypatch):
         seen = []

@@ -8,7 +8,9 @@ description and clamped in code instead.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import re
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class QueryPlan(BaseModel):
@@ -526,10 +528,18 @@ class Comparison(BaseModel):
 VERDICTS = ("go", "revise", "rethink")
 
 
+# In the critique below, a field that may legitimately be empty has a default.
+# Asked for an empty list or string, an OpenAI-compatible endpoint sometimes
+# leaves the key out instead, and a missing key fails validation — twice, with
+# the retry — which threw away a whole paid review over a list of strengths
+# there was nothing to put in.
+
+
 class ProposalIssue(BaseModel):
     """One problem in a project's design, located in the material."""
 
     where: str = Field(
+        default="",
         description="The sentence or phrase the problem is in, copied from the material "
         "word for word — this is checked mechanically. Keep it short. Empty only when "
         "the problem is something missing from the material altogether."
@@ -557,9 +567,23 @@ class Novelty(BaseModel):
     judgement: str = Field(description="Why, against the supplied literature. If the "
                            "literature supplied does not bear on this question, say so: "
                            "a novelty judgement with nothing behind it is an opinion.")
-    prior: list[str] = Field(description="[PMID:x] or [LOCAL:x] markers for papers that "
+    prior: list[str] = Field(default_factory=list,
+                             description="[PMID:x] or [LOCAL:x] markers for papers that "
                              "already did part of this or contradict its premise. Only "
                              "identifiers present in the supplied literature.")
+
+    @field_validator("level", mode="before")
+    @classmethod
+    def _a_score_written_as_text(cls, value):
+        """"2/5", "2 分" or 2.5 — the score is still there; read it rather than
+        fail the review over its formatting."""
+        if isinstance(value, str) and (found := re.search(r"\d+(?:\.\d+)?", value)):
+            value = float(found.group())
+        if isinstance(value, float):
+            value = round(value)
+        if isinstance(value, int):
+            return min(max(value, 1), 5)
+        return value
 
 
 class Critique(BaseModel):
@@ -573,15 +597,18 @@ class Critique(BaseModel):
     hypothesis: str = Field(description="The testable hypothesis, as the material states "
                             "it or as it implies it. Say plainly if there is none.")
     logic: list[ProposalIssue] = Field(
+        default_factory=list,
         description="Breaks in the chain from clinical problem to gap, question, "
         "hypothesis, aims, experiments and conclusion. Empty if the chain holds."
     )
     novelty: Novelty
     rigor: list[ProposalIssue] = Field(
+        default_factory=list,
         description="Design problems: controls, n and power, randomisation and blinding, "
         "replication, model validity, statistics, human samples"
     )
     feasibility: list[ProposalIssue] = Field(
+        default_factory=list,
         description="What will not fit the time, skills, animals, samples or money "
         "available, judged from what the material and the notes say"
     )
@@ -590,11 +617,13 @@ class Critique(BaseModel):
         "could confirm or kill the premise comes first. Each with a rough time."
     )
     questions: list[str] = Field(
+        default_factory=list,
         description="Questions for the supervisor to put to the student at the next "
         "meeting — the ones whose answers show whether the student understands their "
         "own project. Not rhetorical."
     )
-    strengths: list[str] = Field(description="Up to three things that genuinely hold up. "
+    strengths: list[str] = Field(default_factory=list,
+                                 description="Up to three things that genuinely hold up. "
                                  "Empty rather than padded.")
     verdict: str = Field(description="One of: go (start as planned, fix the minor "
                          "points on the way), revise (fix the listed problems first), "
